@@ -1,0 +1,24 @@
+{
+  "name": "changes",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Changes",
+  "scripts": {
+    "dev": "bun --hot src/main.tsx",
+    "typecheck": "tsc --noEmit",
+    "build": "cp node_modules/@gpuix/native-linux-x64-gnu/gpuix-native.linux-x64-gnu.node gpuix-native.linux-x64-gnu.node && bun build --compile src/main.tsx --outfile dist/changes --asset gpuix-native.linux-x64-gnu.node && trash gpuix-native.linux-x64-gnu.node"
+  },
+  "dependencies": {
+    "@gpuix/native": "0.10.0",
+    "@gpuix/native-linux-x64-gnu": "0.10.0",
+    "@gpuix/react": "^0.10.0",
+    "adwaita-gpuix": "workspace:*",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.5.0"
+  }
+}
