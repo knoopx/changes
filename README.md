@@ -37,9 +37,6 @@ Browse and manipulate a jj repository from a single window:
 - **Hunks** — a detail view of a file's hunks: select hunks, then split them
   into a new change or discard them (requires `jj-hunk`).
 
-  ![Hunks view — file list with before/after image diff](assets/screenshot-hunks.png)
-  *Hunks view: per-hunk preview with before/after image diff.*
-
   ![Hunks view — component library image diff](assets/screenshot-image-diff.png)
   *Hunks view: image-file diff across a component-library change.*
 
