@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { Checkbox, Spinner, StatusPage, T, useAdwaita } from "adwaita-gpuix";
 import { type FlatHunk, type ViewProps } from "../types";
-import { keyOf, type WindowKeyEvent } from "../keybus";
-import { useKeyHandler } from "../hooks/use-key-handler";
+import { keyOf } from "../keybus";
+import { useKeyEvents } from "../hooks/use-key-events";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
 import { wrapIndex } from "../indexing";
 import { ListRow, Panel } from "../components/panel";
@@ -21,8 +21,13 @@ import {
 } from "../repo";
 import { createRepoWatcher } from "../watch";
 import { MONO } from "../theme";
+import { HUNKS, HUNKS_RIGHT, matchShortcut } from "../shortcuts";
 
 type Focus = "left" | "right";
+
+type Colors = ReturnType<typeof useAdwaita>["colors"];
+
+const LINE_PX = 24;
 
 const hunkKey = (h: FlatHunk): string => `${h.file_path}:${h.hunk.id}`;
 
@@ -30,6 +35,355 @@ interface PreviewLine {
   text: string;
   color: string;
   bold: boolean;
+}
+
+function computeDedent(raw: string[]): number {
+  const nonEmpty = raw.filter((l) => l !== "");
+  return nonEmpty.length
+    ? Math.min(...nonEmpty.map((l) => l.length - l.trimStart().length))
+    : 0;
+}
+
+function pushPreviewLines(
+  preview: PreviewLine[],
+  lines: string[],
+  prefix: string,
+  dedent: number,
+  color: string,
+): void {
+  for (const l of lines)
+    if (l !== "")
+      preview.push({
+        text: `${prefix}${l.slice(dedent)}`,
+        color,
+        bold: false,
+      });
+}
+
+function buildPreviewLines(hunk: FlatHunk, colors: Colors): PreviewLine[] {
+  const raw: string[] = [];
+  if (hunk.hunk.context) raw.push(...hunk.hunk.context.pre.split("\n"));
+  raw.push(...hunk.hunk.removed.split("\n"), ...hunk.hunk.added.split("\n"));
+  if (hunk.hunk.context) raw.push(...hunk.hunk.context.post.split("\n"));
+  const dedent = computeDedent(raw);
+
+  const preview: PreviewLine[] = [];
+  if (hunk.hunk.context)
+    pushPreviewLines(
+      preview,
+      hunk.hunk.context.pre.split("\n"),
+      " ",
+      dedent,
+      colors.dim_fg,
+    );
+  preview.push({ text: "", color: colors.dim_fg, bold: false });
+  pushPreviewLines(
+    preview,
+    hunk.hunk.removed.split("\n"),
+    "- ",
+    dedent,
+    colors.destructive,
+  );
+  pushPreviewLines(
+    preview,
+    hunk.hunk.added.split("\n"),
+    "+ ",
+    dedent,
+    colors.success,
+  );
+  if (hunk.hunk.context)
+    pushPreviewLines(
+      preview,
+      hunk.hunk.context.post.split("\n"),
+      " ",
+      dedent,
+      colors.dim_fg,
+    );
+  return preview;
+}
+
+interface HunksFocusKeyCtx {
+  setFocus: (focus: Focus) => void;
+  navigate: ViewProps["navigate"];
+}
+
+interface HunksLeftKeyCtx extends HunksFocusKeyCtx {
+  hunks: FlatHunk[];
+  go: (dir: number) => void;
+  jumpTo: (index: number) => void;
+  toggle: () => void;
+  doSplit: () => void;
+  doDiscard: () => void;
+}
+
+interface HunksRightKeyCtx extends HunksFocusKeyCtx {
+  scrollPreviewBy: (lines: number, down: boolean) => void;
+}
+
+function hunkMoveSel(id: string, ctx: HunksLeftKeyCtx): boolean {
+  switch (id) {
+    case "up":
+      ctx.go(-1);
+      return true;
+    case "down":
+      ctx.go(1);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function hunkJumpSel(id: string, ctx: HunksLeftKeyCtx): boolean {
+  switch (id) {
+    case "home":
+      if (ctx.hunks.length > 0) ctx.jumpTo(0);
+      return true;
+    case "end":
+      if (ctx.hunks.length > 0) ctx.jumpTo(ctx.hunks.length - 1);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function hunkSelectAction(id: string, ctx: HunksLeftKeyCtx): boolean {
+  switch (id) {
+    case "select":
+      ctx.toggle();
+      return true;
+    default:
+      return false;
+  }
+}
+
+function hunkAction(id: string, ctx: HunksLeftKeyCtx): boolean {
+  switch (id) {
+    case "split":
+      ctx.doSplit();
+      return true;
+    case "discard":
+      ctx.doDiscard();
+      return true;
+    default:
+      return false;
+  }
+}
+
+function hunkScrollAction(id: string, ctx: HunksRightKeyCtx): boolean {
+  switch (id) {
+    case "scroll-up":
+      ctx.scrollPreviewBy(1, false);
+      return true;
+    case "scroll-down":
+      ctx.scrollPreviewBy(1, true);
+      return true;
+    case "scroll-up-big":
+      ctx.scrollPreviewBy(10, false);
+      return true;
+    case "scroll-down-big":
+      ctx.scrollPreviewBy(10, true);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function hunkFocusAction(id: string, ctx: HunksFocusKeyCtx): boolean {
+  switch (id) {
+    case "focus-right":
+      ctx.setFocus("right");
+      return true;
+    case "focus-left":
+      ctx.setFocus("left");
+      return true;
+    case "back":
+      ctx.navigate({ kind: "changes" });
+      return true;
+    default:
+      return false;
+  }
+}
+
+const HUNK_MOVE_IDS = new Set(["up", "down"]);
+const HUNK_JUMP_IDS = new Set(["home", "end"]);
+const HUNK_SELECT_IDS = new Set(["select"]);
+const HUNK_ACTION_IDS = new Set(["split", "discard"]);
+const HUNK_SCROLL_IDS = new Set([
+  "scroll-up",
+  "scroll-down",
+  "scroll-up-big",
+  "scroll-down-big",
+]);
+const HUNK_FOCUS_IDS = new Set(["focus-right", "focus-left", "back"]);
+
+function HunksUnavailable() {
+  return (
+    <div style={{ display: "flex", flexGrow: 1, minHeight: 0, minWidth: 0 }}>
+      <Panel
+        title="Hunks"
+        focused
+        style={{ flexGrow: 1, flexBasis: 0, minHeight: 0 }}
+      >
+        <StatusPage
+          icon="alert"
+          title="jj-hunk not available"
+          description="Install the jj-hunk CLI to split and discard hunks."
+          style={{ flexGrow: 1, minHeight: 0 }}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function HunkRow({
+  h,
+  isSelected,
+  isChecked,
+  colors,
+  onRowClick,
+  onToggle,
+}: {
+  h: FlatHunk;
+  isSelected: boolean;
+  isChecked: boolean;
+  colors: Colors;
+  onRowClick: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <ListRow selected={isSelected} height={24} onClick={onRowClick}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          minWidth: 0,
+          flexGrow: 1,
+        }}
+      >
+        {}
+        <div style={{ width: 18, flexShrink: 0 }}>
+          <Checkbox checked={isChecked} onCheckedChange={onToggle} />
+        </div>
+        <T
+          color={colors.fg}
+          style={{
+            flexGrow: 1,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {`${h.file_path} [${h.file_status}]`}
+        </T>
+        <T
+          size="caption"
+          color={colors.dim_fg}
+          style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
+        >
+          {`#${h.hunk.index} ${h.hunk.before.start}:${h.hunk.before.lines}-${h.hunk.after.start}:${h.hunk.after.lines}`}
+        </T>
+        <T
+          size="caption"
+          color={colors.dim_fg}
+          style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
+        >
+          {h.hunk.id.slice(0, 12)}
+        </T>
+        {}
+        <T
+          size="caption"
+          color={colors.dim_fg}
+          style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
+        >
+          {h.hunk.type}
+        </T>
+      </div>
+    </ListRow>
+  );
+}
+
+function HunkListBody({
+  hunks,
+  sel,
+  selected,
+  colors,
+  listRef,
+  onRowClick,
+  onToggle,
+}: {
+  hunks: FlatHunk[];
+  sel: number;
+  selected: Set<string>;
+  colors: Colors;
+  listRef: { current: PublicInstance | null };
+  onRowClick: (index: number) => void;
+  onToggle: () => void;
+}) {
+  return (
+    <ListPanel listRef={listRef}>
+      {hunks.map((h, i) => {
+        const k = hunkKey(h);
+        return (
+          <HunkRow
+            key={k + i}
+            h={h}
+            isSelected={i === sel}
+            isChecked={selected.has(k)}
+            colors={colors}
+            onRowClick={() => onRowClick(i)}
+            onToggle={onToggle}
+          />
+        );
+      })}
+    </ListPanel>
+  );
+}
+
+function PreviewPane({
+  title,
+  focused,
+  preview,
+  previewRef,
+}: {
+  title: string;
+  focused: boolean;
+  preview: PreviewLine[];
+  previewRef: MutableRefObject<PublicInstance | null>;
+}) {
+  return (
+    <Panel
+      title={title}
+      focused={focused}
+      style={{ flexGrow: 60, flexBasis: 0, minHeight: 0 }}
+    >
+      {}
+      <div
+        ref={previewRef}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flexGrow: 1,
+          minHeight: 0,
+          overflow: "scroll",
+          padding: 8,
+        }}
+      >
+        {preview.map((p, i) => (
+          <T
+            key={i}
+            color={p.color}
+            weight={p.bold ? 600 : 400}
+
+            style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
+          >
+            {p.text || " "}
+          </T>
+        ))}
+      </div>
+    </Panel>
+  );
 }
 
 export function HunksView({
@@ -94,6 +448,11 @@ export function HunksView({
     ensureVisible(ns);
   };
 
+  const jumpTo = (index: number) => {
+    setSel(index);
+    ensureVisible(index);
+  };
+
   const toggle = () => {
     const h = hunks[sel];
     if (!h) return;
@@ -145,158 +504,70 @@ export function HunksView({
   const doDiscard = () =>
     void runHunkAction((n) => `Discarded ${n} hunk(s)`, discardSelectedHunks);
 
+  const previewOffsetY = (id: number): number => {
+    const off = renderer.getScrollOffset?.(id);
+    return off ? (off[1] ?? 0) : 0;
+  };
+
   const scrollPreviewBy = (lines: number, down: boolean) => {
     const id = previewRef.current?.id;
     if (id === undefined) return;
-
-    const off = renderer.getScrollOffset?.(id);
-    const y = off ? (off[1] ?? 0) : 0;
-    renderer.scrollTo?.(id, 0, down ? y - lines * 24 : y + lines * 24);
+    const delta = (down ? 1 : -1) * lines * LINE_PX;
+    renderer.scrollTo?.(id, 0, previewOffsetY(id) + delta);
   };
 
-  const keyRef = useRef<(e: WindowKeyEvent) => void>(() => {});
+  const leftCtx: HunksLeftKeyCtx = {
+    hunks,
+    go,
+    jumpTo,
+    toggle,
+    doSplit,
+    doDiscard,
+    setFocus,
+    navigate,
+  };
 
   const handleLeftPaneKeys = (key: string): boolean => {
-    switch (key) {
-      case "up":
-        go(-1);
-        return true;
-      case "down":
-        go(1);
-        return true;
-      case "home":
-        if (hunks.length > 0) {
-          setSel(0);
-          ensureVisible(0);
-        }
-        return true;
-      case "end":
-        if (hunks.length > 0) {
-          setSel(hunks.length - 1);
-          ensureVisible(hunks.length - 1);
-        }
-        return true;
-      case "space":
-        toggle();
-        return true;
-      case "s":
-        void doSplit();
-        return true;
-      case "d":
-        void doDiscard();
-        return true;
-      case "tab":
-        setFocus("right");
-        return true;
-    }
+    const m = matchShortcut(HUNKS, key);
+    if (!m) return false;
+    if (HUNK_MOVE_IDS.has(m.id)) return hunkMoveSel(m.id, leftCtx);
+    if (HUNK_JUMP_IDS.has(m.id)) return hunkJumpSel(m.id, leftCtx);
+    if (HUNK_SELECT_IDS.has(m.id)) return hunkSelectAction(m.id, leftCtx);
+    if (HUNK_ACTION_IDS.has(m.id)) return hunkAction(m.id, leftCtx);
+    if (HUNK_FOCUS_IDS.has(m.id)) return hunkFocusAction(m.id, leftCtx);
     return false;
+  };
+
+  const rightCtx: HunksRightKeyCtx = {
+    scrollPreviewBy,
+    setFocus,
+    navigate,
   };
 
   const handleRightPaneKeys = (key: string, shift: boolean): boolean => {
-    if (key === "j") {
-      scrollPreviewBy(shift ? 10 : 1, true);
-      return true;
-    }
-    if (key === "k") {
-      scrollPreviewBy(shift ? 10 : 1, false);
-      return true;
-    }
-    if (key === "pagedown") {
-      scrollPreviewBy(10, true);
-      return true;
-    }
-    if (key === "pageup") {
-      scrollPreviewBy(10, false);
-      return true;
-    }
-    if (key === "tab") {
-      setFocus("left");
-      return true;
-    }
+    const m = matchShortcut(HUNKS_RIGHT, key, { shift });
+    if (!m) return false;
+    if (HUNK_SCROLL_IDS.has(m.id)) return hunkScrollAction(m.id, rightCtx);
+    if (HUNK_FOCUS_IDS.has(m.id)) return hunkFocusAction(m.id, rightCtx);
     return false;
   };
 
-  keyRef.current = (e) => {
+  useKeyEvents((e) => {
     const key = keyOf(e);
-    if (key === "q" || key === "escape") {
-      navigate({ kind: "changes" });
-      return;
-    }
+    const shift = e.modifiers?.shift ?? false;
+
     if (focus === "left") {
       handleLeftPaneKeys(key);
       return;
     }
-
-    const shift = e.modifiers?.shift ?? false;
     handleRightPaneKeys(key, shift);
-  };
+  });
 
-  useKeyHandler(keyRef);
-
-  if (!available) {
-    return (
-      <div style={{ display: "flex", flexGrow: 1, minHeight: 0, minWidth: 0 }}>
-        <Panel
-          title="Hunks"
-          focused
-          style={{ flexGrow: 1, flexBasis: 0, minHeight: 0 }}
-        >
-          <StatusPage
-            icon="alert"
-            title="jj-hunk not available"
-            description="Install the jj-hunk CLI to split and discard hunks."
-            style={{ flexGrow: 1, minHeight: 0 }}
-          />
-        </Panel>
-      </div>
-    );
-  }
+  if (!available) return <HunksUnavailable />;
 
   const hunk = hunks[sel];
-  const preview: PreviewLine[] = [];
-  if (hunk) {
-    const raw: string[] = [];
-    if (hunk.hunk.context) raw.push(...hunk.hunk.context.pre.split("\n"));
-    raw.push(...hunk.hunk.removed.split("\n"), ...hunk.hunk.added.split("\n"));
-    if (hunk.hunk.context) raw.push(...hunk.hunk.context.post.split("\n"));
-    const nonEmpty = raw.filter((l) => l !== "");
-    const dedent = nonEmpty.length
-      ? Math.min(...nonEmpty.map((l) => l.length - l.trimStart().length))
-      : 0;
-    const strip = (l: string) => l.slice(dedent);
-
-    if (hunk.hunk.context)
-      for (const l of hunk.hunk.context.pre.split("\n"))
-        if (l !== "")
-          preview.push({
-            text: ` ${strip(l)}`,
-            color: colors.dim_fg,
-            bold: false,
-          });
-    preview.push({ text: "", color: colors.dim_fg, bold: false });
-    for (const l of hunk.hunk.removed.split("\n"))
-      if (l !== "")
-        preview.push({
-          text: `- ${strip(l)}`,
-          color: colors.destructive,
-          bold: false,
-        });
-    for (const l of hunk.hunk.added.split("\n"))
-      if (l !== "")
-        preview.push({
-          text: `+ ${strip(l)}`,
-          color: colors.success,
-          bold: false,
-        });
-    if (hunk.hunk.context)
-      for (const l of hunk.hunk.context.post.split("\n"))
-        if (l !== "")
-          preview.push({
-            text: ` ${strip(l)}`,
-            color: colors.dim_fg,
-            bold: false,
-          });
-  }
+  if (!hunk) return <HunksUnavailable />;
+  const preview = buildPreviewLines(hunk, colors);
 
   return (
     <div
@@ -330,111 +601,28 @@ export function HunksView({
             </T>
           </div>
         ) : (
-          <ListPanel listRef={listRef}>
-            {hunks.map((h, i) => {
-              const k = hunkKey(h);
-              const isSel = selected.has(k);
-              return (
-                <ListRow
-                  key={k + i}
-                  selected={i === sel}
-                  height={24}
-                  onClick={() => {
-                    setSel(i);
-                    ensureVisible(i);
-                    toggle();
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      minWidth: 0,
-                      flexGrow: 1,
-                    }}
-                  >
-                    {}
-                    <div style={{ width: 18, flexShrink: 0 }}>
-                      <Checkbox
-                        checked={isSel}
-                        onCheckedChange={() => toggle()}
-                      />
-                    </div>
-                    <T
-                      color={colors.fg}
-                      style={{
-                        flexGrow: 1,
-                        minWidth: 0,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {`${h.file_path} [${h.file_status}]`}
-                    </T>
-                    <T
-                      size="caption"
-                      color={colors.dim_fg}
-                      style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
-                    >
-                      {`#${h.hunk.index} ${h.hunk.before.start}:${h.hunk.before.lines}-${h.hunk.after.start}:${h.hunk.after.lines}`}
-                    </T>
-                    <T
-                      size="caption"
-                      color={colors.dim_fg}
-                      style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
-                    >
-                      {h.hunk.id.slice(0, 12)}
-                    </T>
-                    {}
-                    <T
-                      size="caption"
-                      color={colors.dim_fg}
-                      style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
-                    >
-                      {h.hunk.type}
-                    </T>
-                  </div>
-                </ListRow>
-              );
-            })}
-          </ListPanel>
+          <HunkListBody
+            hunks={hunks}
+            sel={sel}
+            selected={selected}
+            colors={colors}
+            listRef={listRef}
+            onRowClick={(i) => {
+              setSel(i);
+              ensureVisible(i);
+              toggle();
+            }}
+            onToggle={toggle}
+          />
         )}
       </Panel>
 
-      <Panel
+      <PreviewPane
         title={hunk.file_path}
         focused={focus === "right"}
-        style={{ flexGrow: 60, flexBasis: 0, minHeight: 0 }}
-      >
-        {}
-        <div
-          ref={previewRef}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flexGrow: 1,
-            minHeight: 0,
-            overflow: "scroll",
-            padding: 8,
-          }}
-        >
-          {hunk
-            ? preview.map((p, i) => (
-                <T
-                  key={i}
-                  color={p.color}
-                  weight={p.bold ? 600 : 400}
-
-                  style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
-                >
-                  {p.text || " "}
-                </T>
-              ))
-            : null}
-        </div>
-      </Panel>
+        preview={preview}
+        previewRef={previewRef}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Spinner, T, useAdwaita } from "adwaita-gpuix";
 import { type ViewProps } from "../types";
-import { keyOf, type WindowKeyEvent } from "../keybus";
+import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
 import { useToast } from "../components/toast";
 import { ListPanel } from "../components/virtual-list-panel";
@@ -9,13 +9,14 @@ import { ListRow, PillGroup, RowShell } from "../components/panel";
 import { ScreenLayout } from "../components/screen-layout";
 import { DiffPanel } from "../components/diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
-import { MonoBadge, PanelTrailing } from "../components/panel-headers";
+import { FileListTitle, MonoBadge, PanelTrailing } from "../components/panel-headers";
 import { wrapIndex } from "../indexing";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
 import { useFileDiffPanelState } from "../hooks/use-file-diff-state";
 import { useFileNavigation } from "../hooks/use-file-navigation";
 import { useFilePanelKeys } from "../hooks/use-file-panel-keys";
-import { useKeyHandler } from "../hooks/use-key-handler";
+import { useKeyEvents } from "../hooks/use-key-events";
+import { useRepoMutation } from "../hooks/use-repo-mutation";
 import { useRepoRefresh } from "../hooks/use-repo-watcher";
 import {
   forgetBookmark,
@@ -26,23 +27,12 @@ import {
   newChange,
   pushBookmarks,
 } from "../repo";
-
-const BOOKMARKS_LEFT_HINTS = [
-  "↑↓ nav",
-  "tab",
-  "n new",
-  "del forget",
-  "g fetch",
-  "p push",
-  "esc back",
-];
-const BOOKMARKS_RIGHT_HINTS = [
-  "↑↓ nav",
-  "tab",
-  "e editor",
-  "j/k scr",
-  "esc back",
-];
+import {
+  BOOKMARKS_LEFT,
+  BOOKMARKS_RIGHT,
+  hints,
+  matchShortcut,
+} from "../shortcuts";
 
 interface BmGroup {
   key: string;
@@ -150,6 +140,7 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
   });
 
   const handleFilePanelKey = useFilePanelKeys({
+    set: BOOKMARKS_RIGHT,
     goFile,
     pageFile,
     files,
@@ -163,69 +154,41 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
     onEscape: () => navigate({ kind: "changes" }),
   });
 
-  const doNew = async () => {
+  const runMutation = useRepoMutation({ setLoading, refresh });
+
+  const doNew = () => {
     const g = groups[sel];
     if (!g) return;
-    setLoading(true);
-    try {
-      toast(await newChange(g.changeId), { type: "success" });
-      await refresh();
-    } catch (e) {
-      toast(failMessage(e), { type: "error" });
-    } finally {
-      setLoading(false);
-    }
+    void runMutation(() => newChange(g.changeId));
   };
 
-  const doForget = async () => {
+  const doForget = () => {
     const g = groups[sel];
     if (!g) return;
-    setLoading(true);
-    try {
+    void runMutation(async () => {
       for (const n of g.names) await forgetBookmark(n);
-      toast(`Forgot bookmarks: ${g.names.join(", ")}`, { type: "success" });
-      await refresh();
-    } catch (e) {
-      toast(failMessage(e), { type: "error" });
-    } finally {
-      setLoading(false);
-    }
+      return `Forgot bookmarks: ${g.names.join(", ")}`;
+    });
   };
 
-  const doFetch = async () => {
-    setLoading(true);
-    try {
+  const doFetch = () =>
+    void runMutation(async () => {
       await gitFetch();
-      toast("Git fetch complete", { type: "success" });
-      await refresh();
-    } catch (e) {
-      toast(failMessage(e), { type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  };
+      return "Git fetch complete";
+    });
 
-  const doPush = async () => {
-    setLoading(true);
-    try {
+  const doPush = () =>
+    void runMutation(async () => {
       const all = groups.flatMap((g) => g.names);
       await pushBookmarks(all);
-      toast("Pushed bookmarks", { type: "success" });
-      await refresh();
-    } catch (e) {
-      toast(failMessage(e), { type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  };
+      return "Pushed bookmarks";
+    });
 
   useRepoRefresh(refresh, () => groups[sel]?.key ?? null);
 
   useEffect(() => {
-    onHints?.(focus === "left" ? BOOKMARKS_LEFT_HINTS : BOOKMARKS_RIGHT_HINTS);
+    onHints?.(focus === "left" ? hints(BOOKMARKS_LEFT) : hints(BOOKMARKS_RIGHT));
   }, [focus]);
-
-  const keyRef = useRef<(e: WindowKeyEvent) => void>(() => {});
 
   const jumpTo = (index: number) => {
     setSel(index);
@@ -234,54 +197,7 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
     if (g) void loadFilesFor(g).catch(() => setPatch(""));
   };
 
-  const handleLeftPaneKeys = (key: string): boolean => {
-    switch (key) {
-      case "up":
-        go(-1);
-        return true;
-      case "down":
-        go(1);
-        return true;
-      case "pageup":
-        go(-10);
-        return true;
-      case "pagedown":
-        go(10);
-        return true;
-      case "home":
-        if (groups.length > 0) jumpTo(0);
-        return true;
-      case "end":
-        if (groups.length > 0) jumpTo(groups.length - 1);
-        return true;
-      case "tab":
-        setFocus("right");
-        return true;
-      case "n":
-        void doNew();
-        return true;
-      case "delete":
-        void doForget();
-        return true;
-      case "g":
-        void doFetch();
-        return true;
-      case "p":
-        void doPush();
-        return true;
-      case "q":
-      case "escape":
-        navigate({ kind: "changes" });
-        return true;
-    }
-    return false;
-  };
-
-  const handleRightPaneKeys = (key: string): boolean => {
-    return handleFilePanelKey(key);
-  };
-
-  keyRef.current = (e) => {
+  useKeyEvents((e) => {
     const key = keyOf(e);
 
     if (focus === "left") {
@@ -290,39 +206,62 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
     }
 
     if (handleRightPaneKeys(key)) return;
+  });
+
+  const handleLeftPaneKeys = (key: string): boolean => {
+    const m = matchShortcut(BOOKMARKS_LEFT, key);
+    if (!m) return false;
+    switch (m.id) {
+      case "up":
+        go(-1);
+        return true;
+      case "down":
+        go(1);
+        return true;
+      case "page-up":
+        go(-10);
+        return true;
+      case "page-down":
+        go(10);
+        return true;
+      case "home":
+        if (groups.length > 0) jumpTo(0);
+        return true;
+      case "end":
+        if (groups.length > 0) jumpTo(groups.length - 1);
+        return true;
+      case "focus-right":
+        setFocus("right");
+        return true;
+      case "new":
+        void doNew();
+        return true;
+      case "forget":
+        void doForget();
+        return true;
+      case "fetch":
+        void doFetch();
+        return true;
+      case "push":
+        void doPush();
+        return true;
+      case "back":
+        navigate({ kind: "changes" });
+        return true;
+      default:
+        return false;
+    }
   };
 
-  useKeyHandler(keyRef);
+  const handleRightPaneKeys = (key: string): boolean => {
+    return handleFilePanelKey(key, {});
+  };
 
   const group = groups[sel];
   const file = files[fileSel];
 
-  const noDesc =
-    !group ||
-    group.description === "" ||
-    group.description === "(no description)";
-  const noDescStyle = {
-    color: colors.dim_fg,
-    fontStyle: "italic" as const,
-    whiteSpace: "nowrap" as const,
-  };
-  const fileTitle = group ? (
-    noDesc ? (
-      <T size="title4" style={noDescStyle}>
-        (no description)
-      </T>
-    ) : (
-      <T
-        size="title4"
-        weight={600}
-        color={focus === "right" ? colors.accent : colors.fg}
-        style={{ whiteSpace: "nowrap" }}
-      >
-        {group.description}
-      </T>
-    )
-  ) : (
-    "Files"
+  const fileTitle = (
+    <FileListTitle description={group?.description} focused={focus === "right"} />
   );
   const diffTitle = group ? (file ? file.path : "all") : "Diff";
 

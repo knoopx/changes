@@ -6,7 +6,7 @@ import {
   type Change,
   type ViewProps,
 } from "../types";
-import { keyOf, type WindowKeyEvent } from "../keybus";
+import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
 import { useToast } from "../components/toast";
 import { ListPanel } from "../components/virtual-list-panel";
@@ -16,7 +16,11 @@ import { BookmarkOverlay } from "../components/bookmark-overlay";
 import { DiffPanel } from "../components/diff-panel";
 import { ImageDiffPanel } from "../components/image-diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
-import { MonoBadge, PanelTrailing } from "../components/panel-headers";
+import {
+  FileListTitle,
+  MonoBadge,
+  PanelTrailing,
+} from "../components/panel-headers";
 import {
   abandonChange,
   editChange,
@@ -49,47 +53,24 @@ import {
 } from "../graph";
 import { wrapIndex } from "../indexing";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
-import { useFileDiffPanelState } from "../hooks/use-file-diff-state";
+import {
+  useFileDiffPanelState,
+  type FilePanelFocus,
+} from "../hooks/use-file-diff-state";
 import { useFileNavigation } from "../hooks/use-file-navigation";
 import { useFilePanelKeys } from "../hooks/use-file-panel-keys";
-import { useKeyHandler } from "../hooks/use-key-handler";
+import { useKeyEvents } from "../hooks/use-key-events";
+import { useRepoMutation } from "../hooks/use-repo-mutation";
 import { useRepoRefresh } from "../hooks/use-repo-watcher";
+import {
+  CHANGES_LEFT,
+  CHANGES_MOVE,
+  CHANGES_RIGHT,
+  hints,
+  matchShortcut,
+} from "../shortcuts";
 
 type Mode = "normal" | "move";
-
-const CHANGES_LEFT_HINTS = [
-  "↑↓ nav",
-  "tab",
-  "n new",
-  "e edit",
-  "s split",
-  "f squash",
-  "r revert",
-  "b bm",
-  "m move",
-  "space sel",
-  "d desc",
-  "i id",
-  "ctrl+p push",
-  "p pal",
-  "del drop",
-  "q quit",
-  "ctrl+←/→ view",
-];
-const CHANGES_RIGHT_HINTS = [
-  "↑↓ nav",
-  "pg file",
-  "⇧pg scr",
-  "j/k scr",
-  "tab",
-  "e open",
-  "s split",
-  "d discard",
-  "h hunks",
-  "q quit",
-  "ctrl+←/→ view",
-];
-const CHANGES_MOVE_HINTS = ["↑↓ move", "enter apply", "esc cancel"];
 
 export function formatFileStats(insertions: number, deletions: number): string {
   const parts: string[] = [];
@@ -127,6 +108,253 @@ function GraphGutter({
       src={src}
       style={{ width: graphGutterWidth(laneCount), height: 24, flexShrink: 0 }}
     />
+  );
+}
+
+interface LeftKeyCtx {
+  sel: number;
+  changes: Change[];
+  displayed: Change[];
+  setFocus: (focus: FilePanelFocus) => void;
+  goChange: (dir: number) => void;
+  jumpToChange: (index: number) => void;
+  mutateSelected: (fn: (id: string) => Promise<string>) => void;
+  openOverlay: () => void;
+  enterMoveMode: () => void;
+  toggleSelect: (changeId: string) => void;
+  selectedIds: Set<string>;
+  setDescribeTargets: (targets: string[]) => void;
+  setDescribeOpen: (open: boolean) => void;
+  copyChangeId: () => Promise<void>;
+  pushSelectedBookmarks: () => Promise<void>;
+  cycleFilter: () => void;
+}
+
+function leftMoveSel(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "up":
+      ctx.goChange(-1);
+      return true;
+    case "down":
+      ctx.goChange(1);
+      return true;
+    case "page-up":
+      ctx.goChange(-10);
+      return true;
+    case "page-down":
+      ctx.goChange(10);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function leftJumpSel(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "home":
+      if (ctx.displayed.length > 0) ctx.jumpToChange(0);
+      return true;
+    case "end":
+      if (ctx.displayed.length > 0)
+        ctx.jumpToChange(ctx.displayed.length - 1);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function leftAction(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "new":
+      ctx.mutateSelected(newChange);
+      return true;
+    case "edit":
+      ctx.mutateSelected(editChange);
+      return true;
+    case "split":
+      ctx.mutateSelected(splitChange);
+      return true;
+    case "squash":
+      ctx.mutateSelected(squashChange);
+      return true;
+    case "revert":
+      ctx.mutateSelected(revertChange);
+      return true;
+    case "drop":
+      ctx.mutateSelected(abandonChange);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function leftSelectAction(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "select": {
+      const ch = ctx.changes[ctx.sel];
+      if (ch) ctx.toggleSelect(ch.change_id);
+      return true;
+    }
+    case "describe": {
+      const ch = ctx.changes[ctx.sel];
+      const targets =
+        ctx.selectedIds.size > 0
+          ? Array.from(ctx.selectedIds)
+          : ch
+            ? [ch.change_id]
+            : [];
+      if (targets.length > 0) {
+        ctx.setDescribeTargets(targets);
+        ctx.setDescribeOpen(true);
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+function leftBookAction(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "bookmark":
+      ctx.openOverlay();
+      return true;
+    case "move":
+      ctx.enterMoveMode();
+      return true;
+    case "copy-id":
+      void ctx.copyChangeId();
+      return true;
+    case "push":
+      void ctx.pushSelectedBookmarks();
+      return true;
+    case "filter":
+      ctx.cycleFilter();
+      return true;
+    default:
+      return false;
+  }
+}
+
+function leftFocusAction(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "focus-right":
+      ctx.setFocus("right");
+      return true;
+    default:
+      return false;
+  }
+}
+
+const LEFT_MOVE_IDS = new Set(["up", "down", "page-up", "page-down"]);
+const LEFT_JUMP_IDS = new Set(["home", "end"]);
+const LEFT_ACTION_IDS = new Set([
+  "new",
+  "edit",
+  "split",
+  "squash",
+  "revert",
+  "drop",
+]);
+const LEFT_SELECT_IDS = new Set(["select", "describe"]);
+const LEFT_BOOK_IDS = new Set([
+  "bookmark",
+  "move",
+  "copy-id",
+  "push",
+  "filter",
+]);
+const LEFT_FOCUS_IDS = new Set(["focus-right"]);
+
+function ChangeRow({
+  c,
+  node,
+  prev,
+  laneCount,
+  isSelected,
+  isCurrent,
+  bm,
+  desc,
+  descStyle,
+  isChecked,
+  describeOpen,
+  describeTargets,
+  side,
+  colors,
+  onRowClick,
+  onToggle,
+  onDescribeDone,
+}: {
+  c: Change;
+  node: GraphNode;
+  prev: GraphNode | null;
+  laneCount: number;
+  isSelected: boolean;
+  isCurrent: boolean;
+  bm: string[];
+  desc: string;
+  descStyle: { color: string; fontWeight?: number };
+  isChecked: boolean;
+  describeOpen: boolean;
+  describeTargets: string[];
+  side: "top" | "bottom";
+  colors: ReturnType<typeof useAdwaita>["colors"];
+  onRowClick: () => void;
+  onToggle: () => void;
+  onDescribeDone: (msg: string | null) => void;
+}) {
+  return (
+    <ListRow
+      selected={isSelected}
+      height={24}
+      style={isSelected ? { position: "relative" } : undefined}
+      onClick={onRowClick}
+    >
+      <RowShell>
+        {}
+        <GraphGutter
+          node={node}
+          prev={prev}
+          laneCount={laneCount}
+          selected={isSelected}
+          dotStroke={isCurrent ? colors.accent : undefined}
+          selectedStroke={colors.fg}
+        />
+        {}
+        {bm.length > 0 && <PillGroup names={bm} dimmed={c.immutable} />}
+        {}
+        <T
+          size="caption"
+          style={{
+            ...descStyle,
+            flexGrow: 1,
+            flexShrink: 100,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            textOverflow: "ellipsis",
+            overflow: "hidden",
+          }}
+        >
+          {desc}
+        </T>
+        {}
+        {c.has_conflicts && (
+          <Icon name="warning" size={12} color={colors.destructive} />
+        )}
+        {}
+        <div style={{ width: 18, flexShrink: 0 }}>
+          <Checkbox checked={isChecked} onCheckedChange={onToggle} />
+        </div>
+        {}
+        {isSelected && describeOpen && (
+          <DescribePopover
+            targetIds={describeTargets}
+            side={side}
+            onDone={onDescribeDone}
+          />
+        )}
+      </RowShell>
+    </ListRow>
   );
 }
 
@@ -288,6 +516,7 @@ export function ChangesView({
   });
 
   const handleFilePanelKey = useFilePanelKeys({
+    set: CHANGES_RIGHT,
     goFile,
     pageFile,
     files,
@@ -297,23 +526,13 @@ export function ChangesView({
     getChangeId: () => changes[sel]?.change_id ?? null,
     scrollDiff,
     setFocus,
-    onBack: () => process.exit(0),
+    onBack: () => {}, 
     onSplit: () => void splitFileAction(),
     onDiscard: () => void discardFileAction(),
     onHunks: () => navigateHunks(),
   });
 
-  const runMutation = async (fn: () => Promise<string>) => {
-    setLoading(true);
-    try {
-      toast(await fn(), { type: "success" });
-      await refresh();
-    } catch (e) {
-      toast(failMessage(e), { type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const runMutation = useRepoMutation({ setLoading, refresh });
 
   const splitFileAction = async () => {
     const ch = changes[sel];
@@ -458,10 +677,10 @@ export function ChangesView({
   useEffect(() => {
     onHints?.(
       mode === "move"
-        ? CHANGES_MOVE_HINTS
+        ? hints(CHANGES_MOVE)
         : focus === "left"
-          ? CHANGES_LEFT_HINTS
-          : CHANGES_RIGHT_HINTS,
+          ? hints(CHANGES_LEFT)
+          : hints(CHANGES_RIGHT),
     );
   }, [focus, mode]);
 
@@ -510,107 +729,88 @@ export function ChangesView({
     void loadSelectedFor(index, displayed);
   };
 
-  const handleLeftPaneKeys = (
-    key: string,
-    shift: boolean,
-    ctrl: boolean,
-  ): boolean => {
-    if (shift && key === "b") {
-      void navigate({ kind: "bookmarks" });
-      return true;
-    }
-    if (shift && key === "o") {
-      void navigate({ kind: "oplog" });
-      return true;
-    }
-    if (shift && key === "w") {
-      void navigate({ kind: "workspaces" });
-      return true;
-    }
-    if (ctrl && key === "p") {
-      void pushSelectedBookmarks();
-      return true;
-    }
+  const mutateSelected = (fn: (id: string) => Promise<string>) => {
+    const ch = changes[sel];
+    if (ch) void runMutation(() => fn(ch.change_id));
+  };
 
-    const mutateSelected = (fn: (id: string) => Promise<string>) => {
-      const ch = changes[sel];
-      if (ch) void runMutation(() => fn(ch.change_id));
-    };
-    const actions: Record<string, () => void> = {
-      up: () => goChange(-1),
-      down: () => goChange(1),
-      pageup: () => goChange(-10),
-      pagedown: () => goChange(10),
-      home: () => {
-        if (displayed.length > 0) jumpToChange(0);
-      },
-      end: () => {
-        if (displayed.length > 0) jumpToChange(displayed.length - 1);
-      },
-      tab: () => setFocus("right"),
-      n: () => mutateSelected(newChange),
-      e: () => mutateSelected(editChange),
-      r: () => mutateSelected(revertChange),
-      s: () => mutateSelected(splitChange),
-      f: () => mutateSelected(squashChange),
-      b: openOverlay,
-      m: enterMoveMode,
-      space: () => {
-        const ch = changes[sel];
-        if (ch) toggleSelect(ch.change_id);
-      },
-      d: () => {
-        const ch = changes[sel];
-        const targets =
-          selectedIds.size > 0
-            ? Array.from(selectedIds)
-            : ch
-              ? [ch.change_id]
-              : [];
-        if (targets.length > 0) {
-          setDescribeTargets(targets);
-          setDescribeOpen(true);
-        }
-      },
-      i: () => void copyChangeId(),
-      delete: () => mutateSelected(abandonChange),
-      "/": cycleFilter,
-      q: () => process.exit(0),
-    };
-    const act = actions[key];
-    if (act) {
-      act();
-      return true;
-    }
+  const leftCtx: LeftKeyCtx = {
+    sel,
+    changes,
+    displayed,
+    setFocus,
+    goChange,
+    jumpToChange,
+    mutateSelected,
+    openOverlay,
+    enterMoveMode,
+    toggleSelect,
+    selectedIds,
+    setDescribeTargets,
+    setDescribeOpen,
+    copyChangeId,
+    pushSelectedBookmarks,
+    cycleFilter,
+  };
+
+  const handleLeftPaneKeys = (key: string, ctrl: boolean): boolean => {
+    const m = matchShortcut(CHANGES_LEFT, key, { ctrl });
+    if (!m) return false;
+    if (LEFT_MOVE_IDS.has(m.id)) return leftMoveSel(m.id, leftCtx);
+    if (LEFT_JUMP_IDS.has(m.id)) return leftJumpSel(m.id, leftCtx);
+    if (LEFT_ACTION_IDS.has(m.id)) return leftAction(m.id, leftCtx);
+    if (LEFT_SELECT_IDS.has(m.id)) return leftSelectAction(m.id, leftCtx);
+    if (LEFT_BOOK_IDS.has(m.id)) return leftBookAction(m.id, leftCtx);
+    if (LEFT_FOCUS_IDS.has(m.id)) return leftFocusAction(m.id, leftCtx);
     return false;
   };
 
   const handleMoveModeKeys = (key: string): boolean => {
-    switch (key) {
+    const m = matchShortcut(CHANGES_MOVE, key);
+    if (!m) return false;
+    switch (m.id) {
       case "up":
         moveChange(-1);
         return true;
       case "down":
         moveChange(1);
         return true;
-      case "enter":
+      case "apply":
         void applyMove();
         return true;
-      case "escape":
+      case "cancel":
         cancelMove();
         return true;
+      default:
+        return false;
     }
-    return false;
   };
 
   const handleOverlayKeys = (key: string): boolean => {
     if (!overlayOpen) return false;
-    if (key === "escape") finishOverlay(null);
+    const m = matchShortcut(CHANGES_MOVE, key);
+    if (m && m.id === "cancel") finishOverlay(null);
     return true;
   };
 
-  const keyRef = useRef<(e: WindowKeyEvent) => void>(() => {});
-  keyRef.current = (e) => {
+  const handleRightPaneKeys = (
+    key: string,
+    shift: boolean,
+    ctrl: boolean,
+  ) => {
+    const m = matchShortcut(CHANGES_RIGHT, key, { shift, ctrl });
+    if (m?.id === "scroll-up-page") {
+      scrollDiff(false);
+      return;
+    }
+    if (m?.id === "scroll-down-page") {
+      scrollDiff(true);
+      return;
+    }
+    if (handleFilePanelKey(key, { shift, ctrl })) return;
+  };
+
+  useKeyEvents((e) => {
     const key = keyOf(e);
     const shift = e.modifiers?.shift ?? false;
     const ctrl = e.modifiers?.ctrl ?? false;
@@ -622,24 +822,13 @@ export function ChangesView({
       return;
     }
 
-    if (shift && key === "pageup") {
-      scrollDiff(false);
-      return;
-    }
-    if (shift && key === "pagedown") {
-      scrollDiff(true);
-      return;
-    }
-
     if (focus === "left") {
-      handleLeftPaneKeys(key, shift, ctrl);
+      handleLeftPaneKeys(key, ctrl);
       return;
     }
 
-    if (handleFilePanelKey(key)) return;
-  };
-
-  useKeyHandler(keyRef);
+    handleRightPaneKeys(key, shift, ctrl);
+  });
 
   const change = changes[sel];
   const file = files[fileSel];
@@ -656,30 +845,8 @@ export function ChangesView({
   const selChangeId =
     (mode === "move" ? moveChanges : changes)[sel]?.change_id ?? null;
 
-  const noDesc = !change || change.description === "(no description)";
-
-  const noDescStyle = {
-    color: colors.dim_fg,
-    fontStyle: "italic" as const,
-    whiteSpace: "nowrap" as const,
-  };
-  const fileTitle = change ? (
-    noDesc ? (
-      <T size="title4" style={noDescStyle}>
-        (no description)
-      </T>
-    ) : (
-      <T
-        size="title4"
-        weight={600}
-        color={focus === "right" ? colors.accent : colors.fg}
-        style={{ whiteSpace: "nowrap" }}
-      >
-        {change.description}
-      </T>
-    )
-  ) : (
-    "Files"
+  const fileTitle = (
+    <FileListTitle description={change?.description} focused={focus === "right"} />
   );
   const diffTitle = change ? (file ? file.path : "all") : "Diff";
 
@@ -699,15 +866,14 @@ export function ChangesView({
             {displayed.map((c, i) => {
               const ci = commitIndex.get(c.commit_id) ?? i;
               const node = graphData[i];
+              const prev = i > 0 ? graphData[i - 1] : null;
 
               const isSelected = c.change_id === selChangeId;
-
               const isCurrent =
                 currentId !== null &&
                 c.change_id.slice(0, 8) === currentId.slice(0, 8);
               const bm = bookmarksMap.get(c.change_id) ?? [];
               const desc = c.description;
-
               const isFocused = isSelected && focus === "left";
               const descStyle = isFocused
                 ? { color: colors.accent, fontWeight: 600 as const }
@@ -716,80 +882,38 @@ export function ChangesView({
                   : { color: colors.fg };
               const isChecked = selectedIds.has(c.change_id);
               return (
-                <ListRow
+                <ChangeRow
                   key={c.commit_id}
-                  selected={isSelected}
-                  height={24}
-
-                  style={isSelected ? { position: "relative" } : undefined}
-                  onClick={() => {
+                  c={c}
+                  node={node}
+                  prev={prev}
+                  laneCount={laneCount}
+                  isSelected={isSelected}
+                  isCurrent={isCurrent}
+                  bm={bm}
+                  desc={desc}
+                  descStyle={descStyle}
+                  isChecked={isChecked}
+                  describeOpen={describeOpen}
+                  describeTargets={describeTargets}
+                  side={sel >= 3 ? "top" : "bottom"}
+                  colors={colors}
+                  onRowClick={() => {
                     setSel(ci);
                     ensureVisible(ci);
                     void loadSelectedFor(ci, changes);
                   }}
-                >
-                  <RowShell>
-                    {}
-                    <GraphGutter
-                      node={node}
-                      prev={i > 0 ? graphData[i - 1] : null}
-                      laneCount={laneCount}
-                      selected={isSelected}
-                      dotStroke={isCurrent ? colors.accent : undefined}
-                      selectedStroke={colors.fg}
-                    />
-                    {}
-                    {bm.length > 0 && (
-                      <PillGroup names={bm} dimmed={c.immutable} />
-                    )}
-                    {}
-                    <T
-                      size="caption"
-                      style={{
-                        ...descStyle,
-                        flexGrow: 1,
-                        flexShrink: 100,
-                        minWidth: 0,
-                        whiteSpace: "nowrap",
-                        textOverflow: "ellipsis",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {desc}
-                    </T>
-                    {}
-                    {c.has_conflicts && (
-                      <Icon
-                        name="warning"
-                        size={12}
-                        color={colors.destructive}
-                      />
-                    )}
-                    {}
-                    <div style={{ width: 18, flexShrink: 0 }}>
-                      <Checkbox
-                        checked={isChecked}
-                        onCheckedChange={() => toggleSelect(c.change_id)}
-                      />
-                    </div>
-                    {}
-                    {isSelected && describeOpen && (
-                      <DescribePopover
-                        targetIds={describeTargets}
-                        side={sel >= 3 ? "top" : "bottom"}
-                        onDone={(msg) => {
-                          setDescribeOpen(false);
-                          setDescribeTargets([]);
-                          setSelectedIds(new Set());
-                          if (msg) {
-                            toast(msg, { type: "success" });
-                            void refresh();
-                          }
-                        }}
-                      />
-                    )}
-                  </RowShell>
-                </ListRow>
+                  onToggle={() => toggleSelect(c.change_id)}
+                  onDescribeDone={(msg) => {
+                    setDescribeOpen(false);
+                    setDescribeTargets([]);
+                    setSelectedIds(new Set());
+                    if (msg) {
+                      toast(msg, { type: "success" });
+                      void refresh();
+                    }
+                  }}
+                />
               );
             })}
           </ListPanel>

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Spinner, T, useAdwaita, type IconName } from "adwaita-gpuix";
 import { type ViewProps } from "../types";
-import { keyOf, type WindowKeyEvent } from "../keybus";
+import { keyOf } from "../keybus";
 import { ListRow, RowIcon } from "../components/panel";
 import { ScreenLayout } from "../components/screen-layout";
 import { ListPanel } from "../components/virtual-list-panel";
@@ -9,7 +9,7 @@ import { DiffPanel } from "../components/diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
 import { MonoBadge, PanelTrailing } from "../components/panel-headers";
 import { failMessage } from "../errors";
-import { useToast } from "../components/toast";
+import { useToast, type ToastFn } from "../components/toast";
 import {
   attachWorkspace,
   createWorkspace,
@@ -29,22 +29,244 @@ import { isTabularPath, parseTabularSides } from "../tabular";
 import { MONO } from "../theme";
 import { clampIndex } from "../indexing";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
-import { useFileDiffPanelState } from "../hooks/use-file-diff-state";
-import { useKeyHandler } from "../hooks/use-key-handler";
+import {
+  useFileDiffPanelState,
+  type FilePanelFocus,
+} from "../hooks/use-file-diff-state";
+import { useKeyEvents } from "../hooks/use-key-events";
 import { useRepoRefresh } from "../hooks/use-repo-watcher";
+import { WS_LEFT, WS_RIGHT, hints, matchShortcut } from "../shortcuts";
 
-const WS_LEFT_HINTS = [
-  "↑↓ nav",
-  "tab",
-  "n new",
-  "a attach",
-  "r rebase",
-  "e edit",
-  "t term",
-  "ctrl+d del",
-  "q back",
-];
-const WS_RIGHT_HINTS = ["↑↓ nav", "tab", "d discard", "j/k scr", "q back"];
+interface LeftKeyCtx {
+  sel: number;
+  workspaces: WorkspaceEntry[];
+  setSel: (n: number) => void;
+  ensureVisible: (index: number) => void;
+  loadSelection: (index: number, ws: WorkspaceEntry[]) => void;
+  jumpTo: (index: number) => void;
+  runAction: (fn: () => Promise<void>) => void;
+  toast: ToastFn;
+  refresh: (opts?: { keepId?: string }) => Promise<void>;
+  navigate: ViewProps["navigate"];
+  forgetCurrentWorkspace: () => void;
+}
+
+interface RightKeyCtx {
+  sel: number;
+  fileSel: number;
+  workspaces: WorkspaceEntry[];
+  files: WorkspaceFile[];
+  setFileSel: (n: number) => void;
+  setPatch: (patch: string) => void;
+  setFocus: (focus: FilePanelFocus) => void;
+  scrollDiff: (down: boolean) => void;
+  runAction: (fn: () => Promise<void>) => void;
+  toast: ToastFn;
+  loadSelection: (index: number, ws: WorkspaceEntry[]) => void;
+  navigate: ViewProps["navigate"];
+}
+
+function leftMoveSel(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "up":
+      if (ctx.sel > 0) {
+        const ns = clampIndex(ctx.sel, -1, ctx.workspaces.length);
+        ctx.setSel(ns);
+        ctx.ensureVisible(ns);
+        void ctx.loadSelection(ns, ctx.workspaces);
+      }
+      return true;
+    case "down":
+      if (ctx.sel < ctx.workspaces.length - 1) {
+        const ns = clampIndex(ctx.sel, 1, ctx.workspaces.length);
+        ctx.setSel(ns);
+        ctx.ensureVisible(ns);
+        void ctx.loadSelection(ns, ctx.workspaces);
+      }
+      return true;
+    case "page-up": {
+      const ns = clampIndex(ctx.sel, -10, ctx.workspaces.length);
+      if (ns !== ctx.sel) {
+        ctx.setSel(ns);
+        ctx.ensureVisible(ns);
+        void ctx.loadSelection(ns, ctx.workspaces);
+      }
+      return true;
+    }
+    case "page-down": {
+      const ns = clampIndex(ctx.sel, 10, ctx.workspaces.length);
+      if (ns !== ctx.sel) {
+        ctx.setSel(ns);
+        ctx.ensureVisible(ns);
+        void ctx.loadSelection(ns, ctx.workspaces);
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+function leftJumpSel(id: string, ctx: LeftKeyCtx): boolean {
+  switch (id) {
+    case "home":
+      if (ctx.workspaces.length > 0) ctx.jumpTo(0);
+      return true;
+    case "end":
+      if (ctx.workspaces.length > 0) ctx.jumpTo(ctx.workspaces.length - 1);
+      return true;
+    case "back":
+      ctx.navigate({ kind: "changes" });
+      return true;
+    default:
+      return false;
+  }
+}
+
+function leftAction(id: string, ctx: LeftKeyCtx): boolean {
+  const w = ctx.workspaces[ctx.sel];
+  switch (id) {
+    case "new":
+      void ctx.runAction(async () => {
+        const name = await createWorkspace("New workspace");
+        ctx.toast(`Created workspace ${name}`, { type: "success" });
+        await ctx.refresh();
+      });
+      return true;
+    case "attach":
+      if (w)
+        void ctx.runAction(async () => {
+          await attachWorkspace(w.name);
+          ctx.toast(`Attaching to ${w.name}`, { type: "info" });
+        });
+      return true;
+    case "rebase":
+      if (w)
+        void ctx.runAction(async () => {
+          ctx.toast(await rebaseWorkspace(w.name), { type: "success" });
+          await ctx.refresh();
+        });
+      return true;
+    case "edit":
+      if (w)
+        void ctx.runAction(async () => {
+          openInEditor(w.path);
+          ctx.toast(`Opening ${w.name} in editor`, { type: "info" });
+        });
+      return true;
+    case "term":
+      if (w)
+        void ctx.runAction(async () => {
+          openTerminal(w.name, w.path);
+          ctx.toast(`Opened terminal for ${w.name}`, { type: "info" });
+        });
+      return true;
+    case "forget":
+      ctx.forgetCurrentWorkspace();
+      return true;
+    default:
+      return false;
+  }
+}
+
+function rightMoveFile(id: string, ctx: RightKeyCtx): boolean {
+  const w = ctx.workspaces[ctx.sel];
+  switch (id) {
+    case "up":
+      if (ctx.fileSel > 0 && w && !w.isDefault) {
+        const nf = ctx.fileSel - 1;
+        ctx.setFileSel(nf);
+        void getWorkspaceDiff(w.name, ctx.files[nf]?.path).then(
+          ctx.setPatch,
+        );
+      }
+      return true;
+    case "down":
+      if (ctx.fileSel < ctx.files.length - 1 && w && !w.isDefault) {
+        const nf = ctx.fileSel + 1;
+        ctx.setFileSel(nf);
+        void getWorkspaceDiff(w.name, ctx.files[nf]?.path).then(
+          ctx.setPatch,
+        );
+      }
+      return true;
+    default:
+      return false;
+  }
+}
+
+function rightJumpFile(id: string, ctx: RightKeyCtx): boolean {
+  const w = ctx.workspaces[ctx.sel];
+  switch (id) {
+    case "home":
+      if (ctx.files.length > 0 && w && !w.isDefault) {
+        ctx.setFileSel(0);
+        void getWorkspaceDiff(w.name, ctx.files[0]?.path).then(
+          ctx.setPatch,
+        );
+      }
+      return true;
+    case "end":
+      if (ctx.files.length > 0 && w && !w.isDefault) {
+        const nf = ctx.files.length - 1;
+        ctx.setFileSel(nf);
+        void getWorkspaceDiff(w.name, ctx.files[nf]?.path).then(
+          ctx.setPatch,
+        );
+      }
+      return true;
+    default:
+      return false;
+  }
+}
+
+function rightScrollDiff(id: string, ctx: RightKeyCtx): boolean {
+  switch (id) {
+    case "scroll-up":
+      ctx.scrollDiff(false);
+      return true;
+    case "scroll-down":
+      ctx.scrollDiff(true);
+      return true;
+    default:
+      return false;
+  }
+}
+
+function rightPaneAction(id: string, ctx: RightKeyCtx): boolean {
+  const w = ctx.workspaces[ctx.sel];
+  switch (id) {
+    case "focus-left":
+      ctx.setFocus("left");
+      return true;
+    case "discard":
+      if (w && !w.isDefault && ctx.files[ctx.fileSel])
+        void ctx.runAction(async () => {
+          ctx.toast(
+            await discardWorkspaceFile(w.name, ctx.files[ctx.fileSel].path),
+            { type: "success" },
+          );
+          await ctx.loadSelection(ctx.sel, ctx.workspaces);
+        });
+      return true;
+    case "back":
+      ctx.navigate({ kind: "changes" });
+      return true;
+    default:
+      return false;
+  }
+}
+
+const LEFT_STEP_IDS = new Set(["up", "down", "page-up", "page-down"]);
+const LEFT_JUMP_IDS = new Set(["home", "end", "back"]);
+const LEFT_ACTION_IDS = new Set([
+  "new",
+  "attach",
+  "rebase",
+  "edit",
+  "term",
+  "forget",
+]);
 
 export function WorkspacesView({ navigate, onHints }: ViewProps) {
   const { colors } = useAdwaita();
@@ -137,8 +359,6 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
 
   useRepoRefresh(refresh, () => workspaces[sel]?.name ?? null);
 
-  const keyRef = useRef<(e: WindowKeyEvent) => void>(() => {});
-
   const forgetCurrentWorkspace = () => {
     const w = workspaces[sel];
     if (w && !w.isDefault)
@@ -154,160 +374,71 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
     void loadSelection(index, workspaces);
   };
 
+  const leftCtx: LeftKeyCtx = {
+    sel,
+    workspaces,
+    setSel,
+    ensureVisible,
+    loadSelection,
+    jumpTo,
+    runAction,
+    toast,
+    refresh,
+    navigate,
+    forgetCurrentWorkspace,
+  };
+
   const handleLeftPaneKeys = (key: string, ctrl: boolean): boolean => {
-    if (ctrl && key === "d") {
-      forgetCurrentWorkspace();
-      return true;
-    }
-    const goBack = () => navigate({ kind: "changes" });
-    const actions: Record<string, () => void> = {
-      q: goBack,
-      escape: goBack,
-      tab: () => setFocus("right"),
-      up: () => {
-        if (sel > 0) {
-          const ns = clampIndex(sel, -1, workspaces.length);
-          setSel(ns);
-          ensureVisible(ns);
-          void loadSelection(ns, workspaces);
-        }
-      },
-      down: () => {
-        if (sel < workspaces.length - 1) {
-          const ns = clampIndex(sel, 1, workspaces.length);
-          setSel(ns);
-          ensureVisible(ns);
-          void loadSelection(ns, workspaces);
-        }
-      },
-      pageup: () => {
-        const ns = clampIndex(sel, -10, workspaces.length);
-        if (ns !== sel) {
-          setSel(ns);
-          ensureVisible(ns);
-          void loadSelection(ns, workspaces);
-        }
-      },
-      pagedown: () => {
-        const ns = clampIndex(sel, 10, workspaces.length);
-        if (ns !== sel) {
-          setSel(ns);
-          ensureVisible(ns);
-          void loadSelection(ns, workspaces);
-        }
-      },
-      home: () => {
-        if (workspaces.length > 0) jumpTo(0);
-      },
-      end: () => {
-        if (workspaces.length > 0) jumpTo(workspaces.length - 1);
-      },
-      n: () => {
-        void runAction(async () => {
-          const name = await createWorkspace("New workspace");
-          toast(`Created workspace ${name}`, { type: "success" });
-          await refresh();
-        });
-      },
-      a: () => {
-        const w = workspaces[sel];
-        if (w)
-          void runAction(async () => {
-            await attachWorkspace(w.name);
-            toast(`Attaching to ${w.name}`, { type: "info" });
-          });
-      },
-      r: () => {
-        const w = workspaces[sel];
-        if (w)
-          void runAction(async () => {
-            toast(await rebaseWorkspace(w.name), { type: "success" });
-            await refresh();
-          });
-      },
-      e: () => {
-        const w = workspaces[sel];
-        if (w)
-          void runAction(async () => {
-            openInEditor(w.path);
-            toast(`Opening ${w.name} in editor`, { type: "info" });
-          });
-      },
-      t: () => {
-        const w = workspaces[sel];
-        if (w)
-          void runAction(async () => {
-            openTerminal(w.name, w.path);
-            toast(`Opened terminal for ${w.name}`, { type: "info" });
-          });
-      },
-      d: forgetCurrentWorkspace,
-    };
-    const act = actions[key];
-    if (act) {
-      act();
+    const m = matchShortcut(WS_LEFT, key, { ctrl });
+    if (!m) return false;
+    if (LEFT_STEP_IDS.has(m.id)) return leftMoveSel(m.id, leftCtx);
+    if (LEFT_JUMP_IDS.has(m.id)) return leftJumpSel(m.id, leftCtx);
+    if (LEFT_ACTION_IDS.has(m.id)) return leftAction(m.id, leftCtx);
+    if (m.id === "focus-right") {
+      setFocus("right");
       return true;
     }
     return false;
+  };
+
+  const rightCtx: RightKeyCtx = {
+    sel,
+    fileSel,
+    workspaces,
+    files,
+    setFileSel,
+    setPatch,
+    setFocus,
+    scrollDiff,
+    runAction,
+    toast,
+    loadSelection,
+    navigate,
   };
 
   const handleRightPaneKeys = (key: string): boolean => {
-    const w = workspaces[sel];
-    const goBack = () => navigate({ kind: "changes" });
-    const actions: Record<string, () => void> = {
-      q: goBack,
-      escape: goBack,
-      tab: () => setFocus("left"),
-      up: () => {
-        if (fileSel > 0 && w && !w.isDefault) {
-          const nf = fileSel - 1;
-          setFileSel(nf);
-          void getWorkspaceDiff(w.name, files[nf]?.path).then(setPatch);
-        }
-      },
-      down: () => {
-        if (fileSel < files.length - 1 && w && !w.isDefault) {
-          const nf = fileSel + 1;
-          setFileSel(nf);
-          void getWorkspaceDiff(w.name, files[nf]?.path).then(setPatch);
-        }
-      },
-      home: () => {
-        if (files.length > 0 && w && !w.isDefault) {
-          setFileSel(0);
-          void getWorkspaceDiff(w.name, files[0]?.path).then(setPatch);
-        }
-      },
-      end: () => {
-        if (files.length > 0 && w && !w.isDefault) {
-          const nf = files.length - 1;
-          setFileSel(nf);
-          void getWorkspaceDiff(w.name, files[nf]?.path).then(setPatch);
-        }
-      },
-      d: () => {
-        if (w && !w.isDefault && files[fileSel])
-          void runAction(async () => {
-            toast(await discardWorkspaceFile(w.name, files[fileSel].path), {
-              type: "success",
-            });
-            await loadSelection(sel, workspaces);
-          });
-      },
-      j: () => scrollDiff(true),
-      pagedown: () => scrollDiff(true),
-      k: () => scrollDiff(false),
-      pageup: () => scrollDiff(false),
-    };
-    const act = actions[key];
-    if (act) {
-      act();
-      return true;
+    const m = matchShortcut(WS_RIGHT, key);
+    if (!m) return false;
+    switch (m.id) {
+      case "up":
+      case "down":
+        return rightMoveFile(m.id, rightCtx);
+      case "home":
+      case "end":
+        return rightJumpFile(m.id, rightCtx);
+      case "scroll-up":
+      case "scroll-down":
+        return rightScrollDiff(m.id, rightCtx);
+      case "focus-left":
+      case "discard":
+      case "back":
+        return rightPaneAction(m.id, rightCtx);
+      default:
+        return false;
     }
-    return false;
   };
 
-  keyRef.current = (e) => {
+  useKeyEvents((e) => {
     const key = keyOf(e);
     const ctrl = e.modifiers?.ctrl ?? false;
 
@@ -317,12 +448,10 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
     }
 
     handleRightPaneKeys(key);
-  };
-
-  useKeyHandler(keyRef);
+  });
 
   useEffect(() => {
-    onHints?.(focus === "left" ? WS_LEFT_HINTS : WS_RIGHT_HINTS);
+    onHints?.(focus === "left" ? hints(WS_LEFT) : hints(WS_RIGHT));
   }, [focus]);
 
   const w = workspaces[sel];

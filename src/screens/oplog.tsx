@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   RadioGroup,
   RadioGroupItem,
@@ -7,7 +7,7 @@ import {
   useAdwaita,
 } from "adwaita-gpuix";
 import { type OpLogEntry, type ViewProps } from "../types";
-import { keyOf, type WindowKeyEvent } from "../keybus";
+import { keyOf } from "../keybus";
 import { ListRow } from "../components/panel";
 import { ListPanel } from "../components/virtual-list-panel";
 import { ScreenLayout } from "../components/screen-layout";
@@ -18,9 +18,11 @@ import { useToast } from "../components/toast";
 import { getOpDiff, loadOpLog, restoreOp, splitOpDiff, undoOp } from "../repo";
 import { clampIndex } from "../indexing";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
-import { useKeyHandler } from "../hooks/use-key-handler";
+import { useKeyEvents } from "../hooks/use-key-events";
+import { useRepoMutation } from "../hooks/use-repo-mutation";
 import { useRepoRefresh } from "../hooks/use-repo-watcher";
 import { MONO } from "../theme";
+import { matchShortcut, OPLOG } from "../shortcuts";
 
 export function OpLogView({ navigate }: ViewProps) {
   const { colors } = useAdwaita();
@@ -83,76 +85,60 @@ export function OpLogView({ navigate }: ViewProps) {
     loadPreview(ns);
   };
 
-  const doRestore = async () => {
+  const runMutation = useRepoMutation({ setLoading, refresh });
+
+  const doRestore = () => {
     if (sel === 0) {
       toast("Already at current operation", { type: "info" });
       return;
     }
     const e = entries[sel];
     if (!e) return;
-    setLoading(true);
-    try {
-      toast(await restoreOp(e.op_id), { type: "success" });
-      await refresh();
-    } catch (err) {
-      toast(failMessage(err), { type: "error" });
-    } finally {
-      setLoading(false);
-    }
+    void runMutation(() => restoreOp(e.op_id));
   };
 
-  const doUndo = async () => {
-    setLoading(true);
-    try {
-      toast(await undoOp(), { type: "success" });
-      await refresh();
-    } catch (e) {
-      toast(failMessage(e), { type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const doUndo = () => void runMutation(() => undoOp());
 
   useRepoRefresh(refresh, () => entries[sel]?.op_id ?? null);
 
-  const keyRef = useRef<(e: WindowKeyEvent) => void>(() => {});
-  keyRef.current = (e) => {
+  useKeyEvents((e) => {
     const key = keyOf(e);
-    switch (key) {
+    const m = matchShortcut(OPLOG, key);
+    if (!m) return;
+    switch (m.id) {
       case "up":
         go(-1);
-        break;
+        return;
       case "down":
         go(1);
-        break;
+        return;
       case "home":
         if (entries.length > 0) {
           setSel(0);
           ensureVisible(0);
           loadPreview(0);
         }
-        break;
+        return;
       case "end":
         if (entries.length > 0) {
           setSel(entries.length - 1);
           ensureVisible(entries.length - 1);
           loadPreview(entries.length - 1);
         }
-        break;
-      case "r":
+        return;
+      case "restore":
         void doRestore();
-        break;
-      case "u":
+        return;
+      case "undo":
         void doUndo();
-        break;
-      case "q":
-      case "escape":
+        return;
+      case "back":
         navigate({ kind: "changes" });
-        break;
+        return;
+      default:
+        return;
     }
-  };
-
-  useKeyHandler(keyRef);
+  });
 
   const selected = entries[sel];
 
