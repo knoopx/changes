@@ -69,6 +69,82 @@ function ensureNodeLane(
   }
 }
 
+function clearMergedLanes(
+  lanesBelow: (Lane | null)[],
+  mergedSet: Set<number>,
+): void {
+  for (const m of Array.from(mergedSet)) lanesBelow[m] = null;
+}
+
+function attachFirstParent(
+  lanesBelow: (Lane | null)[],
+  nodeColumn: number,
+  nodeLaneId: number,
+  firstParent: string,
+  parentLaneIds: number[],
+): void {
+  const nodeLane = lanesBelow[nodeColumn];
+  if (nodeLane) {
+    nodeLane.target = firstParent;
+    parentLaneIds.push(nodeLaneId);
+  }
+}
+
+function collectEmptyColumns(
+  lanesBelow: (Lane | null)[],
+  laneIdsAbove: (number | null)[],
+  nodeColumn: number,
+  mergedSet: Set<number>,
+): { withoutAbove: number[]; withAbove: number[] } {
+  const withoutAbove: number[] = [];
+  const withAbove: number[] = [];
+  for (let c = nodeColumn + 1; c < lanesBelow.length; c++) {
+    if (mergedSet.has(c)) continue;
+    if (lanesBelow[c] == null) {
+      if (laneIdsAbove[c] == null) withoutAbove.push(c);
+      else withAbove.push(c);
+    }
+  }
+  return { withoutAbove, withAbove };
+}
+
+interface PendingLaneCursors {
+  withoutAbove: number[];
+  withAbove: number[];
+  withoutIdx: number;
+  withIdx: number;
+}
+
+function placePendingLane(
+  lanesBelow: (Lane | null)[],
+  pending: Lane,
+  cursors: PendingLaneCursors,
+): void {
+  while (
+    cursors.withoutIdx < cursors.withoutAbove.length &&
+    lanesBelow[cursors.withoutAbove[cursors.withoutIdx]] != null
+  ) {
+    cursors.withoutIdx++;
+  }
+  if (cursors.withoutIdx < cursors.withoutAbove.length) {
+    lanesBelow[cursors.withoutAbove[cursors.withoutIdx]] = pending;
+    cursors.withoutIdx++;
+    return;
+  }
+  while (
+    cursors.withIdx < cursors.withAbove.length &&
+    lanesBelow[cursors.withAbove[cursors.withIdx]] != null
+  ) {
+    cursors.withIdx++;
+  }
+  if (cursors.withIdx < cursors.withAbove.length) {
+    lanesBelow[cursors.withAbove[cursors.withIdx]] = pending;
+    cursors.withIdx++;
+    return;
+  }
+  lanesBelow.push(pending);
+}
+
 function placeParentLanes(
   lanesAbove: (Lane | null)[],
   mergedSet: Set<number>,
@@ -79,80 +155,61 @@ function placeParentLanes(
   counter: { next: number },
 ): { lanesBelow: (Lane | null)[]; parentLaneIds: number[] } {
   const lanesBelow = lanesAbove.slice();
-  for (const m of Array.from(mergedSet)) lanesBelow[m] = null;
-
+  clearMergedLanes(lanesBelow, mergedSet);
   const parentLaneIds: number[] = [];
-  const emptyColsWithoutAbove: number[] = [];
-  const emptyColsWithAbove: number[] = [];
-
   if (commit.parents.length === 0) {
     lanesBelow[nodeColumn] = null;
-  } else {
-    const firstParent = commit.parents[0];
-    const nodeLane = lanesBelow[nodeColumn];
-    if (nodeLane) {
-      nodeLane.target = firstParent;
-      parentLaneIds.push(nodeLaneId);
-    }
-    for (let c = nodeColumn + 1; c < lanesBelow.length; c++) {
-      if (mergedSet.has(c)) continue;
-      if (lanesBelow[c] == null) {
-        if (laneIdsAbove[c] == null) emptyColsWithoutAbove.push(c);
-        else emptyColsWithAbove.push(c);
-      }
-    }
-    let withoutIdx = 0;
-    let withIdx = 0;
-    for (let pi = 1; pi < commit.parents.length; pi++) {
-      const newLaneId = counter.next++;
-      parentLaneIds.push(newLaneId);
-      const pending: Lane = { laneId: newLaneId, target: commit.parents[pi] };
-      let placed = false;
-      while (
-        withoutIdx < emptyColsWithoutAbove.length &&
-        lanesBelow[emptyColsWithoutAbove[withoutIdx]] != null
-      ) {
-        withoutIdx++;
-      }
-      if (withoutIdx < emptyColsWithoutAbove.length) {
-        lanesBelow[emptyColsWithoutAbove[withoutIdx]] = pending;
-        withoutIdx++;
-        placed = true;
-      }
-      if (!placed) {
-        while (
-          withIdx < emptyColsWithAbove.length &&
-          lanesBelow[emptyColsWithAbove[withIdx]] != null
-        ) {
-          withIdx++;
-        }
-        if (withIdx < emptyColsWithAbove.length) {
-          lanesBelow[emptyColsWithAbove[withIdx]] = pending;
-          withIdx++;
-          placed = true;
-        }
-      }
-      if (!placed) lanesBelow.push(pending);
-    }
+    return { lanesBelow, parentLaneIds };
+  }
+  attachFirstParent(
+    lanesBelow,
+    nodeColumn,
+    nodeLaneId,
+    commit.parents[0],
+    parentLaneIds,
+  );
+  const { withoutAbove, withAbove } = collectEmptyColumns(
+    lanesBelow,
+    laneIdsAbove,
+    nodeColumn,
+    mergedSet,
+  );
+  const cursors: PendingLaneCursors = {
+    withoutAbove,
+    withAbove,
+    withoutIdx: 0,
+    withIdx: 0,
+  };
+  for (let pi = 1; pi < commit.parents.length; pi++) {
+    const newLaneId = counter.next++;
+    parentLaneIds.push(newLaneId);
+    placePendingLane(
+      lanesBelow,
+      { laneId: newLaneId, target: commit.parents[pi] },
+      cursors,
+    );
   }
   return { lanesBelow, parentLaneIds };
 }
 
-function packLanesLeft(
-  lanesBelow: (Lane | null)[],
+function buildLanePositions(
+  lanes: (Lane | null)[],
+): Map<number, number> {
+  const positions = new Map<number, number>();
+  for (let c = 0; c < lanes.length; c++) {
+    const lane = lanes[c];
+    if (lane) positions.set(lane.laneId, c);
+  }
+  return positions;
+}
+
+function computeBlockedLanes(
   laneIdsAbove: (number | null)[],
+  lanePositionsBelow: Map<number, number>,
   mergedSet: Set<number>,
   nodeLaneId: number,
-): Map<number, number> {
-  trimRight(lanesBelow);
-
-  const lanePositionsBelow = new Map<number, number>();
-  for (let c = 0; c < lanesBelow.length; c++) {
-    const lane = lanesBelow[c];
-    if (lane) lanePositionsBelow.set(lane.laneId, c);
-  }
-
-  const laneWidth = Math.max(laneIdsAbove.length, lanesBelow.length);
+  laneWidth: number,
+): boolean[] {
   const blocked = new Array<boolean>(laneWidth).fill(false);
   const markBlocked = (from: number, to: number): void => {
     if (from === to) return;
@@ -160,7 +217,6 @@ function packLanesLeft(
     const hi = Math.max(from, to);
     for (let c = lo; c <= hi && c < laneWidth; c++) blocked[c] = true;
   };
-
   for (let c = 0; c < laneWidth; c++) {
     const aboveLane = c < laneIdsAbove.length ? laneIdsAbove[c] : null;
     if (aboveLane == null) continue;
@@ -169,14 +225,29 @@ function packLanesLeft(
     const dest = lanePositionsBelow.get(aboveLane);
     if (dest != null && c !== dest) markBlocked(c, dest);
   }
+  return blocked;
+}
 
+function collectLanes(lanesBelow: (Lane | null)[]): Lane[] {
   const laneList: Lane[] = [];
   for (let c = 0; c < lanesBelow.length; c++) {
     const lane = lanesBelow[c];
     if (lane) laneList.push(lane);
   }
+  return laneList;
+}
+
+function resetLaneArray(lanesBelow: (Lane | null)[], laneWidth: number): void {
   lanesBelow.length = 0;
   for (let c = 0; c < laneWidth; c++) lanesBelow[c] = null;
+}
+
+function packLanesInto(
+  laneList: Lane[],
+  lanesBelow: (Lane | null)[],
+  laneWidth: number,
+  blocked: boolean[],
+): void {
   for (const lane of laneList) {
     let target = 0;
     while (
@@ -187,26 +258,38 @@ function packLanesLeft(
     if (target >= laneWidth) target = lanesBelow.length;
     lanesBelow[target] = lane;
   }
-
-  trimRight(lanesBelow);
-
-  lanePositionsBelow.clear();
-  for (let c = 0; c < lanesBelow.length; c++) {
-    const lane = lanesBelow[c];
-    if (lane) lanePositionsBelow.set(lane.laneId, c);
-  }
-  return lanePositionsBelow;
 }
 
-function buildRoutes(
+function packLanesLeft(
+  lanesBelow: (Lane | null)[],
+  laneIdsAbove: (number | null)[],
+  mergedSet: Set<number>,
+  nodeLaneId: number,
+): Map<number, number> {
+  trimRight(lanesBelow);
+  const lanePositionsBelow = buildLanePositions(lanesBelow);
+  const laneWidth = Math.max(laneIdsAbove.length, lanesBelow.length);
+  const blocked = computeBlockedLanes(
+    laneIdsAbove,
+    lanePositionsBelow,
+    mergedSet,
+    nodeLaneId,
+    laneWidth,
+  );
+  const laneList = collectLanes(lanesBelow);
+  resetLaneArray(lanesBelow, laneWidth);
+  packLanesInto(laneList, lanesBelow, laneWidth, blocked);
+  trimRight(lanesBelow);
+  return buildLanePositions(lanesBelow);
+}
+
+function routesFromAbove(
   laneIdsAbove: (number | null)[],
   lanePositionsBelow: Map<number, number>,
   mergedSet: Set<number>,
   nodeColumn: number,
   nodeLaneId: number,
   nodeLaneExistsAbove: boolean,
-  parentLaneIds: number[],
-  nodeColAbove: number,
 ): Array<[number, number, number]> {
   const routes: Array<[number, number, number]> = [];
   for (let c = 0; c < laneIdsAbove.length; c++) {
@@ -227,6 +310,17 @@ function buildRoutes(
       if (dest != null) routes.push([c, dest, aboveLane - 1]);
     }
   }
+  return routes;
+}
+
+function routesFromParents(
+  parentLaneIds: number[],
+  lanePositionsBelow: Map<number, number>,
+  nodeColumn: number,
+  nodeLaneId: number,
+  nodeColAbove: number,
+): Array<[number, number, number]> {
+  const routes: Array<[number, number, number]> = [];
   for (const p of parentLaneIds) {
     const dest = lanePositionsBelow.get(p);
     if (dest == null) continue;
@@ -234,6 +328,34 @@ function buildRoutes(
     routes.push([nodeColumn, dest, p - 1]);
   }
   return routes;
+}
+
+function buildRoutes(
+  laneIdsAbove: (number | null)[],
+  lanePositionsBelow: Map<number, number>,
+  mergedSet: Set<number>,
+  nodeColumn: number,
+  nodeLaneId: number,
+  nodeLaneExistsAbove: boolean,
+  parentLaneIds: number[],
+  nodeColAbove: number,
+): Array<[number, number, number]> {
+  return routesFromAbove(
+    laneIdsAbove,
+    lanePositionsBelow,
+    mergedSet,
+    nodeColumn,
+    nodeLaneId,
+    nodeLaneExistsAbove,
+  ).concat(
+    routesFromParents(
+      parentLaneIds,
+      lanePositionsBelow,
+      nodeColumn,
+      nodeLaneId,
+      nodeColAbove,
+    ),
+  );
 }
 
 export function generateGraphData(
