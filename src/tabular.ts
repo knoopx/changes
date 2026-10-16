@@ -80,7 +80,10 @@ export function parseTable(text: string, delim: string): string[][] | null {
   }
   row.push(field);
   rows.push(row);
+  return validateParsedRows(rows);
+}
 
+function validateParsedRows(rows: string[][]): string[][] | null {
   if (
     rows.length > 0 &&
     rows[rows.length - 1].length === 1 &&
@@ -120,32 +123,37 @@ const PATCH_HEADER_PREFIXES = [
   "@@",
 ];
 
-export function patchSides(patch: string, path?: string): PatchSides | null {
-  const lines = patch.split("\n");
-  let start = -1;
+function findPatchStart(lines: string[], path?: string): number {
   for (let i = 0; i < lines.length; i++) {
     if (!lines[i].startsWith("diff --git")) continue;
-
     const b = lines[i].split(" ")[3] ?? "";
     const p = b.startsWith("b/") ? b.slice(2) : b;
-    if (!path || p === path) {
-      start = i;
-      break;
-    }
+    if (!path || p === path) return i;
   }
-  if (start < 0) return null;
-  let end = lines.length;
+  return -1;
+}
+
+function findPatchEnd(lines: string[], start: number): number {
   for (let i = start + 1; i < lines.length; i++) {
-    if (lines[i].startsWith("diff --git")) {
-      end = i;
-      break;
-    }
+    if (lines[i].startsWith("diff --git")) return i;
   }
+  return lines.length;
+}
+
+function isPatchHeaderLine(line: string): boolean {
+  return PATCH_HEADER_PREFIXES.some((p) => line.startsWith(p));
+}
+
+function collectPatchSides(
+  lines: string[],
+  start: number,
+  end: number,
+): PatchSides | null {
   const old: string[] = [];
   const next: string[] = [];
   for (let i = start + 1; i < end; i++) {
     const l = lines[i];
-    if (PATCH_HEADER_PREFIXES.some((p) => l.startsWith(p))) {
+    if (isPatchHeaderLine(l)) {
       if (l.startsWith("Binary files") || l.startsWith("GIT binary patch"))
         return null;
       continue;
@@ -159,6 +167,14 @@ export function patchSides(patch: string, path?: string): PatchSides | null {
     }
   }
   return { old, next };
+}
+
+export function patchSides(patch: string, path?: string): PatchSides | null {
+  const lines = patch.split("\n");
+  const start = findPatchStart(lines, path);
+  if (start < 0) return null;
+  const end = findPatchEnd(lines, start);
+  return collectPatchSides(lines, start, end);
 }
 
 export interface AlignedCell {
@@ -192,26 +208,26 @@ function padRow(row: string[], cols: number): string[] {
   return out;
 }
 
-export function alignTables(
-  oldRows: string[][],
-  nextRows: string[][],
-  hasHeader: boolean,
-): AlignedTable {
-  const oldData = hasHeader ? oldRows.slice(1) : oldRows;
-  const nextData = hasHeader ? nextRows.slice(1) : nextRows;
+function pickHeaderSrc(oldRows: string[][], nextRows: string[][]): string[] {
+  if (nextRows.length > 0) return nextRows[0] as string[];
+  if (oldRows.length > 0) return oldRows[0] as string[];
+  return [];
+}
 
-  const headerSrc =
-    nextRows.length > 0
-      ? (nextRows[0] as string[])
-      : oldRows.length > 0
-        ? (oldRows[0] as string[])
-        : [];
-  const cols = Math.max(
+function computeCols(
+  headerSrc: string[],
+  oldData: string[][],
+  nextData: string[][],
+): number {
+  return Math.max(
     headerSrc.length,
     ...oldData.map((r) => r.length),
     ...nextData.map((r) => r.length),
     0,
   );
+}
+
+function buildHeader(headerSrc: string[], cols: number): string[] {
   const header: string[] = [];
   for (let c = 0; c < cols; c++) {
     header.push(
@@ -220,7 +236,10 @@ export function alignTables(
         : `col ${c + 1}`,
     );
   }
+  return header;
+}
 
+function buildRowKeyQueues(oldData: string[][]): Map<string, number[]> {
   const queues = new Map<string, number[]>();
   oldData.forEach((r, i) => {
     const k = rowKey(r);
@@ -228,7 +247,18 @@ export function alignTables(
     if (q) q.push(i);
     else queues.set(k, [i]);
   });
+  return queues;
+}
 
+interface RowLinks {
+  links: Map<number, number>;
+  linkedOld: Set<number>;
+}
+
+function buildRowLinks(
+  queues: Map<string, number[]>,
+  nextData: string[][],
+): RowLinks {
   const links = new Map<number, number>();
   const linkedOld = new Set<number>();
   let lastOld = -1;
@@ -243,9 +273,32 @@ export function alignTables(
       lastOld = o;
     }
   });
+  return { links, linkedOld };
+}
 
+function pairCells(
+  oldRow: string[],
+  nextRow: string[],
+  cols: number,
+): AlignedCell[] {
+  const cells: AlignedCell[] = [];
+  for (let c = 0; c < cols; c++) {
+    const ov = oldRow[c] ?? "";
+    const nv = nextRow[c] ?? "";
+    cells.push({ old: ov, next: nv, changed: ov !== nv });
+  }
+  return cells;
+}
+
+function buildAlignedRows(
+  links: Map<number, number>,
+  linkedOld: Set<number>,
+  oldData: string[][],
+  nextData: string[][],
+  cols: number,
+  hasHeader: boolean,
+): AlignedRow[] {
   const no = (idx: number): number => idx + (hasHeader ? 2 : 1);
-
   const rows: AlignedRow[] = [];
   const emitRemoved = (k: number): void => {
     rows.push({
@@ -264,15 +317,12 @@ export function alignTables(
           if (!linkedOld.has(k)) emitRemoved(k);
       };
       if (prevOld >= 0) flushGap();
-      const o = oldData[L] as string[];
-      const n = nextData[i] as string[];
-      const cells: AlignedCell[] = [];
-      for (let c = 0; c < cols; c++) {
-        const ov = o[c] ?? "";
-        const nv = n[c] ?? "";
-        cells.push({ old: ov, next: nv, changed: ov !== nv });
-      }
-      rows.push({ kind: "pair", oldNo: no(L), nextNo: no(i), cells });
+      rows.push({
+        kind: "pair",
+        oldNo: no(L),
+        nextNo: no(i),
+        cells: pairCells(oldData[L] as string[], nextData[i] as string[], cols),
+      });
       if (prevOld < 0) flushGap();
       prevOld = L;
     } else {
@@ -284,9 +334,31 @@ export function alignTables(
       });
     }
   }
-
   for (let k = prevOld + 1; k < oldData.length; k++)
     if (!linkedOld.has(k)) emitRemoved(k);
+  return rows;
+}
+
+export function alignTables(
+  oldRows: string[][],
+  nextRows: string[][],
+  hasHeader: boolean,
+): AlignedTable {
+  const oldData = hasHeader ? oldRows.slice(1) : oldRows;
+  const nextData = hasHeader ? nextRows.slice(1) : nextRows;
+  const headerSrc = pickHeaderSrc(oldRows, nextRows);
+  const cols = computeCols(headerSrc, oldData, nextData);
+  const header = buildHeader(headerSrc, cols);
+  const queues = buildRowKeyQueues(oldData);
+  const { links, linkedOld } = buildRowLinks(queues, nextData);
+  const rows = buildAlignedRows(
+    links,
+    linkedOld,
+    oldData,
+    nextData,
+    cols,
+    hasHeader,
+  );
   return { header, hasHeader, rows, cols };
 }
 
@@ -295,6 +367,16 @@ export interface TabularSides {
   old: string[][];
   next: string[][];
   hasHeader: boolean;
+}
+
+function hasHeaderRow(rows: string[][]): boolean {
+  return (
+    rows.length > 1 &&
+    rows.every((r) => {
+      const k = (r[0] ?? "").trim();
+      return k !== "" && !Number.isFinite(Number(k));
+    })
+  );
 }
 
 export function parseTabularSides(
@@ -316,11 +398,5 @@ export function parseTabularSides(
   if (!next || !old) return null;
 
   const probeRows = nextText.length >= oldText.length ? next : old;
-  const hasHeader =
-    probeRows.length > 1 &&
-    probeRows.every((r) => {
-      const k = (r[0] ?? "").trim();
-      return k !== "" && !Number.isFinite(Number(k));
-    });
-  return { delim, old, next, hasHeader };
+  return { delim, old, next, hasHeader: hasHeaderRow(probeRows) };
 }
