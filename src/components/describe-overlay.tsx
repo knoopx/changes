@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Icon, KbdGroup, T, Textarea, useAdwaita } from "adwaita-gpuix";
 import { failMessage } from "../errors";
 import { describeChange } from "../repo";
-import { KeyHint } from "./key-hint";
+import { DESCRIBE_OVERLAY, hints, matchShortcut } from "../shortcuts";
+import { groupHints } from "./kbd";
+import { ShortcutHint } from "./key-hint";
 
 function arrowSrc(border: string, bg: string, up: boolean): string {
   const back = up ? "M0 7 L12 7 L6 0 Z" : "M0 0 L12 0 L6 7 Z";
@@ -110,14 +112,27 @@ export function DescribePopover({
           style={{ flexGrow: 1 }}
           onKeyDown={(e) => {
             const k = (e.key ?? "").toLowerCase();
-            if (k === "escape") onDone(null);
-            else if (k === "enter" && (e.modifiers?.ctrl || e.modifiers?.cmd))
-              void submit();
+            const m = matchShortcut(DESCRIBE_OVERLAY, k, {
+              ctrl: e.modifiers?.ctrl ?? false,
+              cmd: e.modifiers?.cmd ?? false,
+            });
+            if (!m) return;
+            switch (m.id) {
+              case "describe":
+                void submit();
+                break;
+              case "cancel":
+                onDone(null);
+                break;
+              default:
+                break;
+            }
           }}
         />
         <KbdGroup>
-          <KeyHint hint="ctrl+enter describe" />
-          <KeyHint hint="esc cancel" />
+          {groupHints(hints(DESCRIBE_OVERLAY)).map((g) => (
+            <ShortcutHint key={g.desc} group={g} />
+          ))}
         </KbdGroup>
       </div>
     </anchored>

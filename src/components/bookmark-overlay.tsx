@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Icon, KbdGroup, T, useAdwaita } from "adwaita-gpuix";
 import { failMessage } from "../errors";
 import { forgetBookmark, listBookmarks, setBookmarkToChange } from "../repo";
-import { KeyHint } from "./key-hint";
+import { BOOKMARK_OVERLAY, hints, matchShortcut } from "../shortcuts";
+import { groupHints } from "./kbd";
+import { ShortcutHint } from "./key-hint";
 import {
   candidateRowStyle,
   DialogFrame,
@@ -80,10 +82,24 @@ export function BookmarkOverlay({
     }
   };
 
-  const { activeIdx, start, end } = windowCandidates(
+  const {
+    activeIdx,
+    start,
+    end,
+  } = windowCandidates(
     candidates,
     activeIndex,
     5,
+  );
+
+  const byId = (id: string) =>
+    BOOKMARK_OVERLAY.find((s) => s.id === id)!;
+  const empty = candidates.length === 0 && !loading;
+  const shownHints = groupHints(
+    (empty
+      ? ["type", "set", "cancel"]
+      : hints(BOOKMARK_OVERLAY).map((s) => s.id)
+    ).map(byId),
   );
 
   return (
@@ -104,15 +120,25 @@ export function BookmarkOverlay({
         onSubmit={submit}
         onKeyDown={(e) => {
           const k = (e.key ?? "").toLowerCase();
-          if (k === "escape") onDone(null);
-          else if (k === "up") {
-            setActiveIndex((i) => Math.max(0, i - 1));
-          } else if (k === "down") {
-            setActiveIndex((i) =>
-              Math.min(i + 1, Math.max(candidates.length - 1, 0)),
-            );
-          } else if (k === "delete") {
-            void doForget();
+          const m = matchShortcut(BOOKMARK_OVERLAY, k);
+          if (!m) return;
+          switch (m.id) {
+            case "nav-up":
+              setActiveIndex((i) => Math.max(0, i - 1));
+              break;
+            case "nav-down":
+              setActiveIndex((i) =>
+                Math.min(i + 1, Math.max(candidates.length - 1, 0)),
+              );
+              break;
+            case "cancel":
+              onDone(null);
+              break;
+            case "forget":
+              void doForget();
+              break;
+            default:
+              break; 
           }
         }}
       />
@@ -138,6 +164,12 @@ export function BookmarkOverlay({
             const idx = start + i;
             const isCreate = !names.includes(c);
             const isActive = idx === activeIdx;
+            const color =
+              isActive || isCreate
+                ? isActive
+                  ? colors.accent
+                  : colors.warning
+                : null;
             return (
               <div
                 key={c + idx}
@@ -150,24 +182,12 @@ export function BookmarkOverlay({
                 <Icon
                   name={isCreate ? "plus" : "bookmark"}
                   size={14}
-                  color={
-                    isActive
-                      ? colors.accent
-                      : isCreate
-                        ? colors.warning
-                        : colors.dim_fg
-                  }
+                  color={color ?? colors.dim_fg}
                 />
                 <T
                   size="body"
                   weight={isActive ? 600 : 400}
-                  color={
-                    isActive
-                      ? colors.accent
-                      : isCreate
-                        ? colors.warning
-                        : colors.fg
-                  }
+                  color={color ?? colors.fg}
                 >
                   {c}
                 </T>
@@ -177,20 +197,9 @@ export function BookmarkOverlay({
         )}
       </div>
       <KbdGroup>
-        {candidates.length === 0 && !loading ? (
-          <>
-            <KeyHint hint="type bookmark" />
-            <KeyHint hint="enter set" />
-            <KeyHint hint="esc cancel" />
-          </>
-        ) : (
-          <>
-            <KeyHint hint="↑↓ nav" />
-            <KeyHint hint="enter select/create" />
-            <KeyHint hint="esc cancel" />
-            <KeyHint hint="del forget" />
-          </>
-        )}
+        {shownHints.map((g) => (
+          <ShortcutHint key={g.desc} group={g} />
+        ))}
       </KbdGroup>
     </DialogFrame>
   );

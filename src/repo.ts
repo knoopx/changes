@@ -617,7 +617,7 @@ async function parentChangeId(changeId: string): Promise<string | null> {
 export async function squashChange(changeId: string): Promise<string> {
   const parent = await parentChangeId(changeId);
   if (!parent) throw new Error("Cannot squash root change (no parent)");
-  await jjOk(["squash", "--from", changeId, "--into", parent]);
+  await jjOk(["squash", "-u", "-r", changeId]);
   return "Squashed change into parent";
 }
 
@@ -630,7 +630,7 @@ export async function restoreFile(
   changeId: string,
   filePath: string,
 ): Promise<string> {
-  await jjOk(["restore", "-r", changeId, "--paths", filePath]);
+  await jjOk(["restore", "--changes-in", changeId, filePath]);
   return `Restored file '${filePath}'`;
 }
 
@@ -640,7 +640,7 @@ export async function setBookmarkToChange(
 ): Promise<string> {
   const name = bookmarkName.split("@")[0]!.trim();
   if (!name) throw new Error("Bookmark name is required");
-  await jjOk(["bookmark", "set", name, "-r", changeId]);
+  await jjOk(["bookmark", "set", "--allow-backwards", name, "-r", changeId]);
   return `Set bookmark '${name}' to ${changeId.slice(0, 8)}`;
 }
 
@@ -662,7 +662,7 @@ export async function gitFetch(): Promise<void> {
 }
 
 export async function undoOp(): Promise<string> {
-  await jjOk(["op", "undo"]);
+  await jjOk(["undo"]);
   return "Undid operation";
 }
 
@@ -682,7 +682,7 @@ export async function rebaseChange(
     if (!parent) throw new Error("Target change has no parent");
     onto = parent;
   }
-  await jjOk(["rebase", "-r", changeId, "--onto", onto]);
+  await jjOk(["rebase", "-r", changeId, "-o", onto]);
   return `Rebased change ${changeId.slice(0, 8)}`;
 }
 
@@ -821,13 +821,13 @@ export async function discardWorkspaceFile(
   filePath: string,
 ): Promise<string> {
   const wsPath = join(findWorkspaceRoot(), ".jj", "workspaces", name);
-  await jjOk(["restore", "--paths", filePath], wsPath);
+  await jjOk(["restore", "--changes-in", `${name}@`, filePath], wsPath);
   return `Restored file '${filePath}' in ${name}`;
 }
 
 export async function rebaseWorkspace(name: string): Promise<string> {
   await jjOk(["rebase", "-s", `${name}@`, "-o", "@"]);
-  await jjOk(["squash", "-r", `${name}@`]);
+  await jjOk(["squash", "-u", "-r", `${name}@`]);
   return `Rebased & squashed ${name} into working copy`;
 }
 
