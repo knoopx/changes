@@ -30,3 +30,35 @@ export function PanelTrailing({
     </div>
   );
 }
+
+export function FileListTitle({
+  description,
+  focused,
+}: {
+  description: string | null | undefined;
+  focused: boolean;
+}) {
+  const { colors } = useAdwaita();
+  if (!description) return "Files";
+  const noDesc = description === "" || description === "(no description)";
+  if (noDesc)
+    return (
+      <T
+        size="title4"
+        color={colors.dim_fg}
+        style={{ whiteSpace: "nowrap" }}
+      >
+        (no description)
+      </T>
+    );
+  return (
+    <T
+      size="title4"
+      weight={600}
+      color={focused ? colors.accent : colors.fg}
+      style={{ whiteSpace: "nowrap" }}
+    >
+      {description}
+    </T>
+  );
+}

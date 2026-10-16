@@ -11,70 +11,18 @@ import { type View } from "./types";
 import { findWorkspaceRoot } from "./repo";
 import { globalKeyHandler, keyOf } from "./keybus";
 import { StatusBar } from "./components/status-bar";
+import {
+  GLOBAL,
+  VIEW_SHORTCUTS,
+  hints as viewHints,
+  matchShortcut,
+  type Shortcut,
+} from "./shortcuts";
 import { ChangesView } from "./screens/changes";
 import { BookmarksView } from "./screens/bookmarks";
 import { OpLogView } from "./screens/oplog";
 import { HunksView } from "./screens/hunks";
 import { WorkspacesView } from "./screens/workspaces";
-
-const VIEW_HINTS: Record<View["kind"], string[]> = {
-  changes: [
-    "↑↓ nav",
-    "tab pane",
-    "n new",
-    "e edit",
-    "s split",
-    "f squash",
-    "r revert",
-    "b bookmark",
-    "del abandon",
-    "/ filter",
-    "B bookmarks",
-    "O oplog",
-    "W workspaces",
-    "m move",
-    "q quit",
-    "space select",
-    "d describe",
-    "i copy",
-    "ctrl+p push",
-    "ctrl+←/→ view",
-  ],
-  bookmarks: [
-    "↑↓ nav",
-    "tab pane",
-    "n new",
-    "del forget",
-    "g fetch",
-    "p push",
-    "e editor",
-    "j/k scr",
-    "esc back",
-    "ctrl+←/→ view",
-  ],
-  oplog: ["↑↓ nav", "r restore", "u undo", "esc back", "ctrl+←/→ view"],
-  hunks: [
-    "↑↓ nav",
-    "space select",
-    "s split",
-    "d discard",
-    "esc back",
-    "ctrl+←/→ view",
-  ],
-  workspaces: [
-    "↑↓ nav",
-    "tab pane",
-    "n new",
-    "a attach",
-    "r rebase",
-    "e editor",
-    "t terminal",
-    "d discard",
-    "ctrl+d delete",
-    "esc back",
-    "ctrl+←/→ view",
-  ],
-};
 
 const VIEW_ITEMS: ViewSwitcherItem[] = [
   { id: "changes", label: "Changes", icon: "list" },
@@ -95,7 +43,7 @@ export function App() {
   const [view, setView] = useState<View>({ kind: "changes" });
 
   const [vcsLabel, setVcsLabel] = useState("");
-  const [hints, setHints] = useState<string[] | null>(null);
+  const [hints, setHints] = useState<Shortcut[] | null>(null);
 
   useEffect(() => {
     setHints(null);
@@ -108,13 +56,15 @@ export function App() {
 
   useEffect(() => {
     globalKeyHandler.current = (e) => {
-      if (!e.modifiers?.ctrl) return false;
       const key = keyOf(e);
-      if (key !== "left" && key !== "right") return false;
+      const m = matchShortcut(GLOBAL, key, {
+        ctrl: e.modifiers?.ctrl ?? false,
+      });
+      if (!m) return false;
       const kind = viewRef.current.kind;
       const idx = kind === "hunks" ? 0 : MAIN_VIEWS.indexOf(kind);
       const n = MAIN_VIEWS.length;
-      const next = key === "right" ? (idx + 1) % n : (idx + n - 1) % n;
+      const next = m.id === "view-right" ? (idx + 1) % n : (idx + n - 1) % n;
       setView({ kind: MAIN_VIEWS[next] });
       return true;
     };
@@ -200,7 +150,7 @@ export function App() {
           <WorkspacesView navigate={navigate} onHints={setHints} />
         )}
       </div>
-      <StatusBar hints={hints ?? VIEW_HINTS[view.kind]} />
+      <StatusBar hints={hints ?? viewHints(VIEW_SHORTCUTS[view.kind])} />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { KbdGroup, useAdwaita } from "adwaita-gpuix";
-import { KeyHint } from "./key-hint";
+import { type Shortcut } from "../shortcuts";
+import { groupHints } from "./kbd";
+import { ShortcutHint } from "./key-hint";
 
-export function StatusBar({ hints }: { hints?: string[] }) {
+export function StatusBar({ hints }: { hints?: Shortcut[] }) {
   const t = useAdwaita();
   const { colors } = t;
   return (
@@ -29,8 +31,8 @@ export function StatusBar({ hints }: { hints?: string[] }) {
           }}
         >
           <KbdGroup style={{ overflow: "hidden" }}>
-            {hints.map((h) => (
-              <KeyHint key={h} hint={h} />
+            {groupHints(hints).map((g) => (
+              <ShortcutHint key={g.desc} group={g} />
             ))}
           </KbdGroup>
         </div>
