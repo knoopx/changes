@@ -86,8 +86,10 @@ export type View =
   | { kind: "hunks"; changeId: string; filePath?: string }
   | { kind: "workspaces" };
 
+import type { Shortcut } from "./shortcuts";
+
 export interface ViewProps {
   navigate: (view: View) => void;
 
-  onHints?: (hints: string[] | null) => void;
+  onHints?: (hints: Shortcut[] | null) => void;
 }

@@ -1,18 +1,16 @@
-import { Kbd, T, useAdwaita } from "adwaita-gpuix";
+import { T, useAdwaita } from "adwaita-gpuix";
+import { type HintGroup, KbdBindings } from "./kbd";
 
-export function KeyHint({ hint }: { hint: string }) {
+export function ShortcutHint({ group }: { group: HintGroup }) {
   const t = useAdwaita();
-  const sp = hint.indexOf(" ");
-  const key = sp === -1 ? hint : hint.slice(0, sp);
-  const label = sp === -1 ? "" : hint.slice(sp + 1);
+  const label =
+    group.desc.charAt(0).toUpperCase() + group.desc.slice(1);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-      <Kbd>{key}</Kbd>
-      {label ? (
-        <T size="caption" color={t.colors.dim_fg}>
-          {label}
-        </T>
-      ) : null}
+      <KbdBindings kbds={group.kbds} />
+      <T size="caption" color={t.colors.dim_fg}>
+        {label}
+      </T>
     </div>
   );
 }
