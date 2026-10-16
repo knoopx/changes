@@ -44,7 +44,7 @@ export interface ImageSize {
   height: number;
 }
 
-export function readImageDimensions(bytes: Buffer): ImageSize | null {
+function readPngDimensions(bytes: Buffer): ImageSize | null {
   const has = (n: number) => bytes.length >= n;
 
   if (
@@ -57,9 +57,21 @@ export function readImageDimensions(bytes: Buffer): ImageSize | null {
     return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
   }
 
+  return null;
+}
+
+function readGifDimensions(bytes: Buffer): ImageSize | null {
+  const has = (n: number) => bytes.length >= n;
+
   if (has(10) && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
     return { width: bytes.readUInt16LE(6), height: bytes.readUInt16LE(8) };
   }
+
+  return null;
+}
+
+function readBmpDimensions(bytes: Buffer): ImageSize | null {
+  const has = (n: number) => bytes.length >= n;
 
   if (has(26) && bytes[0] === 0x42 && bytes[1] === 0x4d) {
     return {
@@ -67,6 +79,12 @@ export function readImageDimensions(bytes: Buffer): ImageSize | null {
       height: Math.abs(bytes.readInt32LE(22)),
     };
   }
+
+  return null;
+}
+
+function readWebpDimensions(bytes: Buffer): ImageSize | null {
+  const has = (n: number) => bytes.length >= n;
 
   if (
     has(12) &&
@@ -81,6 +99,12 @@ export function readImageDimensions(bytes: Buffer): ImageSize | null {
   ) {
     return null;
   }
+
+  return null;
+}
+
+function readJpegDimensions(bytes: Buffer): ImageSize | null {
+  const has = (n: number) => bytes.length >= n;
 
   if (has(4) && bytes[0] === 0xff && bytes[1] === 0xd8) {
     let i = 2;
@@ -114,7 +138,18 @@ export function readImageDimensions(bytes: Buffer): ImageSize | null {
       i += 2 + bytes.readUInt16BE(i + 2);
     }
   }
+
   return null;
+}
+
+export function readImageDimensions(bytes: Buffer): ImageSize | null {
+  return (
+    readPngDimensions(bytes) ??
+    readGifDimensions(bytes) ??
+    readBmpDimensions(bytes) ??
+    readWebpDimensions(bytes) ??
+    readJpegDimensions(bytes)
+  );
 }
 
 const imageSidesCache = new Map<string, ImageSides>();
