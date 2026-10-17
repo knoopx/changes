@@ -16,7 +16,8 @@ Browse and manipulate a jj repository from a single window:
   revert, and abandon changes; reorder them in move mode; multi-select and
   describe in one go; set or create bookmarks from a typeahead overlay; copy
   the change id; push a change's bookmarks; open a file in your editor. A
-  revision filter (All / Stack / Mine / Tracked / Recent) is cycled in place.
+  revision filter is cycled in place; the filter set and the starting filter
+  are user-configurable (see [Configuration](#configuration)).
 
   ![Changes view — commit-graph gutter, file list, and native diff preview](assets/screenshot-changes.png)
   *Changes view: commit-graph gutter + file list + table diff preview.*
@@ -73,3 +74,30 @@ dist/changes [path]
 An optional `[path]` opens the app at that directory's jj workspace root
 (the nearest ancestor directory containing a `.jj`); when omitted it uses
 the current working directory.
+
+## Configuration
+
+The revision filters shown in the Changes view (and which one starts
+active) are configurable via `~/.config/changes/config.json`
+(override the location with `$GPUIX_CHANGES_CONFIG`). The file is optional;
+missing, empty, or invalid entries fall back to the built-in defaults.
+Copy `examples/config.json` to get started.
+
+```jsonc
+{
+  // Replace the built-in filter list. Each entry is a label + jj revset.
+  "filters": [
+    { "label": "Stack", "revset": "ancestors(@) ~ root()" },
+    { "label": "All", "revset": "::" },
+    { "label": "Mine", "revset": "mine()" },
+    { "label": "Tracked", "revset": "bookmarks()" },
+    { "label": "Recent", "revset": "committer_date(after:'30 days ago')" }
+  ],
+  // Label of the filter active when the view opens (default: "Stack").
+  "defaultFilter": "Stack"
+}
+```
+
+Only the keys you provide are applied: omit `filters` to keep the built-in
+list, omit `defaultFilter` to start on Stack. Any revset jj accepts works
+(`@`, `bookmark(main)`, `description(my ~)`, ...).

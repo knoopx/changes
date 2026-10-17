@@ -1,0 +1,10 @@
+{
+  "filters": [
+    { "label": "Stack", "revset": "ancestors(@) ~ root()" },
+    { "label": "All", "revset": "::" },
+    { "label": "Mine", "revset": "mine()" },
+    { "label": "Tracked", "revset": "bookmarks()" },
+    { "label": "Recent", "revset": "committer_date(after:'30 days ago')" }
+  ],
+  "defaultFilter": "Stack"
+}
