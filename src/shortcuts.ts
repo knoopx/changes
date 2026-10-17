@@ -90,7 +90,7 @@ export const CHANGES_LEFT: Shortcut[] = [
   { id: "squash", kbds: ["f"], desc: "squash" },
   { id: "revert", kbds: ["r"], desc: "revert" },
   { id: "bookmark", kbds: ["b"], desc: "bm" },
-  { id: "move", kbds: ["m"], desc: "move" },
+  { id: "move", kbds: ["enter"], desc: "move" },
   { id: "select", kbds: ["space"], desc: "sel" },
   { id: "describe", kbds: ["d"], desc: "desc" },
   { id: "copy-id", kbds: ["i"], desc: "id" },
