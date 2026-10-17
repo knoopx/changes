@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Spinner, T, useAdwaita, type IconName } from "adwaita-gpuix";
+import {
+  RadioGroup,
+  RadioGroupItem,
+  Spinner,
+  T,
+  useAdwaita,
+  type IconName,
+} from "adwaita-gpuix";
 import { type ViewProps } from "../types";
 import { keyOf } from "../keybus";
 import { ListRow, RowIcon } from "../components/panel";
@@ -516,8 +523,20 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
                     flexGrow: 1,
                   }}
                 >
-                  {}
-                  <RowIcon name={icon} color={iconColor} />
+                  <RadioGroup
+                    value="0"
+                    onValueChange={(v) => {
+                      const idx = Number(v);
+                      if (idx >= 0 && idx < workspaces.length) {
+                        setSel(idx);
+                        ensureVisible(idx);
+                        void loadSelection(idx, workspaces);
+                      }
+                    }}
+                  >
+                    <RadioGroupItem value={String(i)} />
+                  </RadioGroup>
+                  {isIde && <RowIcon name={icon} color={iconColor} />}
                   <T
                     color={isSel ? colors.accent : colors.fg}
                     weight={isSel ? 600 : 400}
