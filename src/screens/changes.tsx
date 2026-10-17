@@ -1,11 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Checkbox, Icon, T, useAdwaita } from "adwaita-gpuix";
-import {
-  REVISION_FILTERS,
-  type Bookmark,
-  type Change,
-  type ViewProps,
-} from "../types";
+import { type Bookmark, type Change, type ViewProps } from "../types";
+import { loadConfig } from "../config";
 import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
 import { useToast } from "../components/toast";
@@ -25,7 +21,6 @@ import {
   abandonChange,
   editChange,
   getRawDiff,
-  getVcsLabel,
   getCurrentChangeId,
   listBookmarks,
   loadChangedFiles,
@@ -155,8 +150,7 @@ function leftJumpSel(id: string, ctx: LeftKeyCtx): boolean {
       if (ctx.displayed.length > 0) ctx.jumpToChange(0);
       return true;
     case "end":
-      if (ctx.displayed.length > 0)
-        ctx.jumpToChange(ctx.displayed.length - 1);
+      if (ctx.displayed.length > 0) ctx.jumpToChange(ctx.displayed.length - 1);
       return true;
     default:
       return false;
@@ -358,13 +352,7 @@ function ChangeRow({
   );
 }
 
-export function ChangesView({
-  navigate,
-  onVcsLabel,
-  onHints,
-}: ViewProps & {
-  onVcsLabel?: (label: string) => void;
-}) {
+export function ChangesView({ navigate, onHints }: ViewProps) {
   const { colors } = useAdwaita();
   const toast = useToast();
   const [changes, setChanges] = useState<Change[]>([]);
@@ -382,7 +370,8 @@ export function ChangesView({
     setLoading,
     clearFiles,
   } = useFileDiffPanelState();
-  const [filterIndex, setFilterIndex] = useState(0);
+  const { filters, defaultIndex } = useMemo(() => loadConfig(), []);
+  const [filterIndex, setFilterIndex] = useState(defaultIndex);
   const [mode, setMode] = useState<Mode>("normal");
   const [moveChanges, setMoveChanges] = useState<Change[]>([]);
   const [moveOriginalIndex, setMoveOriginalIndex] = useState(0);
@@ -447,19 +436,17 @@ export function ChangesView({
     keepId?: string;
   }) => {
     const f = opts?.fi ?? filterIndex;
-    const revset = REVISION_FILTERS[f][1];
+    const revset = filters[Math.min(f, filters.length - 1)][1];
     setLoading(true);
     try {
       const chs = await loadChanges(revset);
-      const [bms, vcs, cur] = await Promise.all([
+      const [bms, cur] = await Promise.all([
         listBookmarks(),
-        getVcsLabel(),
         getCurrentChangeId(),
       ]);
       setChanges(chs);
       setBookmarksMap(buildBookmarksMap(bms));
 
-      onVcsLabel?.(vcs ?? "");
       setCurrentId(cur);
       const s = resolveSelectionIndex(chs, {
         sel: opts?.sel,
@@ -526,7 +513,7 @@ export function ChangesView({
     getChangeId: () => changes[sel]?.change_id ?? null,
     scrollDiff,
     setFocus,
-    onBack: () => {}, 
+    onBack: () => {},
     onSplit: () => void splitFileAction(),
     onDiscard: () => void discardFileAction(),
     onHunks: () => navigateHunks(),
@@ -576,7 +563,8 @@ export function ChangesView({
   };
 
   const cycleFilter = () => {
-    const nf = (filterIndex + 1) % REVISION_FILTERS.length;
+    if (filters.length === 0) return;
+    const nf = (filterIndex + 1) % filters.length;
     setFilterIndex(nf);
     void refresh({ fi: nf, sel: 0, fileSel: 0 });
   };
@@ -669,10 +657,6 @@ export function ChangesView({
     refresh,
     () => (mode === "move" ? moveChanges : changes)[sel]?.change_id ?? null,
   );
-
-  const onVcsLabelRef = useRef(onVcsLabel);
-  onVcsLabelRef.current = onVcsLabel;
-  useEffect(() => () => onVcsLabelRef.current?.(""), []);
 
   useEffect(() => {
     onHints?.(
@@ -793,11 +777,7 @@ export function ChangesView({
     return true;
   };
 
-  const handleRightPaneKeys = (
-    key: string,
-    shift: boolean,
-    ctrl: boolean,
-  ) => {
+  const handleRightPaneKeys = (key: string, shift: boolean, ctrl: boolean) => {
     const m = matchShortcut(CHANGES_RIGHT, key, { shift, ctrl });
     if (m?.id === "scroll-up-page") {
       scrollDiff(false);
@@ -840,13 +820,16 @@ export function ChangesView({
         : null,
     [file, patch],
   );
-  const filterLabel = REVISION_FILTERS[filterIndex][0];
+  const filterLabel = filters[filterIndex]?.[0] ?? "";
 
   const selChangeId =
     (mode === "move" ? moveChanges : changes)[sel]?.change_id ?? null;
 
   const fileTitle = (
-    <FileListTitle description={change?.description} focused={focus === "right"} />
+    <FileListTitle
+      description={change?.description}
+      focused={focus === "right"}
+    />
   );
   const diffTitle = change ? (file ? file.path : "all") : "Diff";
 

@@ -8,7 +8,8 @@ import {
   type ViewSwitcherItem,
 } from "adwaita-gpuix";
 import { type View } from "./types";
-import { findWorkspaceRoot } from "./repo";
+import { findWorkspaceRoot, getVcsLabel } from "./repo";
+import { createRepoWatcher } from "./watch";
 import { globalKeyHandler, keyOf } from "./keybus";
 import { StatusBar } from "./components/status-bar";
 import {
@@ -44,6 +45,18 @@ export function App() {
 
   const [vcsLabel, setVcsLabel] = useState("");
   const [hints, setHints] = useState<Shortcut[] | null>(null);
+
+  useEffect(() => {
+    const fetchLabel = () =>
+      getVcsLabel()
+        .then((v) => setVcsLabel(v ?? ""))
+        .catch(() => {});
+    void fetchLabel();
+    const watcher = createRepoWatcher(findWorkspaceRoot(), () => {
+      void fetchLabel();
+    });
+    return () => watcher.stop();
+  }, []);
 
   useEffect(() => {
     setHints(null);
@@ -100,19 +113,19 @@ export function App() {
           />
         }
         left={
-          vcsLabel ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Icon name="gitBranch" size={16} color={t.colors.accent} />
-              <T size="caption" color={t.colors.accent}>
-                {vcsLabel}
-              </T>
-            </div>
-          ) : null
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="gitBranch" size={16} color={t.colors.accent} />
+            <T size="caption" color={t.colors.accent}>
+              {shortCwd()}
+            </T>
+          </div>
         }
         right={
-          <T size="caption" color={t.colors.dim_fg}>
-            {shortCwd()}
-          </T>
+          vcsLabel ? (
+            <T size="caption" color={t.colors.dim_fg}>
+              {vcsLabel}
+            </T>
+          ) : null
         }
       />
       <div
@@ -126,11 +139,7 @@ export function App() {
         }}
       >
         {view.kind === "changes" && (
-          <ChangesView
-            navigate={navigate}
-            onVcsLabel={setVcsLabel}
-            onHints={setHints}
-          />
+          <ChangesView navigate={navigate} onHints={setHints} />
         )}
         {view.kind === "bookmarks" && (
           <BookmarksView navigate={navigate} onHints={setHints} />

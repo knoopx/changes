@@ -205,9 +205,8 @@ export async function getVcsLabel(): Promise<string | null> {
     (await (await jj(["diff", "--git", "-r", "@"])).stdout.trim()).length > 0;
   const marker = dirty ? "*" : "";
 
-  const glyph = "\u{100C0}";
-  if (names.length > 0) return `${glyph} ${names}${marker}`;
-  if (short8.length > 0) return `◎ ${short8}${marker}`;
+  if (names.length > 0) return `${names}${marker}`;
+  if (short8.length > 0) return `${short8}${marker}`;
   return null;
 }
 
