@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox, Icon, T, useAdwaita } from "adwaita-gpuix";
-import { type Bookmark, type Change, type ViewProps } from "../types";
-import { loadConfig } from "../config";
+import { type Bookmark, type Change, type View, type ViewProps } from "../types";
+import { loadConfig, onConfigChanged } from "../config";
 import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
 import { useToast } from "../components/toast";
 import { ListPanel } from "../components/virtual-list-panel";
 import { ListRow, PillGroup, RowShell } from "../components/panel";
+import { BookmarkPill } from "../components/bookmark-pill";
 import { ScreenLayout } from "../components/screen-layout";
 import { BookmarkOverlay } from "../components/bookmark-overlay";
+import { RevsetOverlay } from "../components/revset-overlay";
+import { RestoreOverlay } from "../components/restore-overlay";
 import { DiffPanel } from "../components/diff-panel";
 import { ImageDiffPanel } from "../components/image-diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
@@ -19,6 +22,7 @@ import {
 } from "../components/panel-headers";
 import {
   abandonChange,
+  absorbChange,
   editChange,
   getRawDiff,
   getCurrentChangeId,
@@ -114,7 +118,9 @@ interface LeftKeyCtx {
   goChange: (dir: number) => void;
   jumpToChange: (index: number) => void;
   mutateSelected: (fn: (id: string) => Promise<string>) => void;
+  navigate: (v: View) => void;
   openOverlay: () => void;
+  openRevset: () => void;
   enterMoveMode: () => void;
   toggleSelect: (changeId: string) => void;
   selectedIds: Set<string>;
@@ -122,7 +128,6 @@ interface LeftKeyCtx {
   setDescribeOpen: (open: boolean) => void;
   copyChangeId: () => Promise<void>;
   pushSelectedBookmarks: () => Promise<void>;
-  cycleFilter: () => void;
 }
 
 function leftMoveSel(id: string, ctx: LeftKeyCtx): boolean {
@@ -170,6 +175,9 @@ function leftAction(id: string, ctx: LeftKeyCtx): boolean {
       return true;
     case "squash":
       ctx.mutateSelected(squashChange);
+      return true;
+    case "absorb":
+      ctx.mutateSelected(absorbChange);
       return true;
     case "revert":
       ctx.mutateSelected(revertChange);
@@ -222,8 +230,13 @@ function leftBookAction(id: string, ctx: LeftKeyCtx): boolean {
     case "push":
       void ctx.pushSelectedBookmarks();
       return true;
+    case "evolog": {
+      const ch = ctx.changes[ctx.sel];
+      if (ch) ctx.navigate({ kind: "evolog", changeId: ch.change_id });
+      return true;
+    }
     case "filter":
-      ctx.cycleFilter();
+      ctx.openRevset();
       return true;
     default:
       return false;
@@ -247,6 +260,7 @@ const LEFT_ACTION_IDS = new Set([
   "edit",
   "split",
   "squash",
+  "absorb",
   "revert",
   "drop",
 ]);
@@ -256,6 +270,7 @@ const LEFT_BOOK_IDS = new Set([
   "move",
   "copy-id",
   "push",
+  "evolog",
   "filter",
 ]);
 const LEFT_FOCUS_IDS = new Set(["focus-right"]);
@@ -315,7 +330,15 @@ function ChangeRow({
           selectedStroke={colors.fg}
         />
         {}
-        {bm.length > 0 && <PillGroup names={bm} dimmed={c.immutable} />}
+        {bm.length > 0 && (
+          <PillGroup
+            names={bm}
+            dimmed={c.immutable}
+            renderPill={(name, dimmed) => (
+              <BookmarkPill name={name} dimmed={dimmed} />
+            )}
+          />
+        )}
         {}
         <T
           size="caption"
@@ -370,8 +393,19 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     setLoading,
     clearFiles,
   } = useFileDiffPanelState();
-  const { filters, defaultIndex } = useMemo(() => loadConfig(), []);
-  const [filterIndex, setFilterIndex] = useState(defaultIndex);
+  const initialConfig = useRef(loadConfig());
+  const [filters, setFilters] = useState<ReadonlyArray<
+    readonly [string, string]
+  >>(initialConfig.current.filters);
+  const [filterIndex, setFilterIndex] = useState(
+    initialConfig.current.defaultIndex,
+  );
+  const [customFilter, setCustomFilter] = useState<
+    readonly [string, string] | null
+  >(null);
+  const [extraFilters, setExtraFilters] = useState<[string, string][]>([]);
+  const [revsetOpen, setRevsetOpen] = useState(false);
+  const [bookmarkNames, setBookmarkNames] = useState<string[]>([]);
   const [mode, setMode] = useState<Mode>("normal");
   const [moveChanges, setMoveChanges] = useState<Change[]>([]);
   const [moveOriginalIndex, setMoveOriginalIndex] = useState(0);
@@ -384,6 +418,19 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [describeOpen, setDescribeOpen] = useState(false);
   const [describeTargets, setDescribeTargets] = useState<string[]>([]);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreFor, setRestoreFor] = useState<string | null>(null);
+
+  const effFilters = useMemo(() => {
+    let list: ReadonlyArray<readonly [string, string]> =
+      extraFilters.length > 0 ? [...filters, ...extraFilters] : filters;
+    if (customFilter) {
+      list = list.some((f) => f[1] === customFilter[1])
+        ? list
+        : [...list, customFilter];
+    }
+    return list;
+  }, [filters, extraFilters, customFilter]);
 
   const { diffRef, listRef, ensureVisible, scrollDiff } = useDiffListRefs(true);
 
@@ -434,9 +481,11 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     sel?: number;
     fileSel?: number;
     keepId?: string;
+    revset?: string;
   }) => {
     const f = opts?.fi ?? filterIndex;
-    const revset = filters[Math.min(f, filters.length - 1)][1];
+    const revset =
+      opts?.revset ?? effFilters[Math.min(f, effFilters.length - 1)][1];
     setLoading(true);
     try {
       const chs = await loadChanges(revset);
@@ -446,6 +495,7 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
       ]);
       setChanges(chs);
       setBookmarksMap(buildBookmarksMap(bms));
+      setBookmarkNames(Array.from(new Set(bms.map((b) => b.name))));
 
       setCurrentId(cur);
       const s = resolveSelectionIndex(chs, {
@@ -517,6 +567,13 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     onSplit: () => void splitFileAction(),
     onDiscard: () => void discardFileAction(),
     onHunks: () => navigateHunks(),
+    onRestoreHunks: () => {
+      const file = files[fileSel];
+      if (file) {
+        setRestoreFor(file.path);
+        setRestoreOpen(true);
+      }
+    },
   });
 
   const runMutation = useRepoMutation({ setLoading, refresh });
@@ -562,12 +619,46 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     });
   };
 
-  const cycleFilter = () => {
-    if (filters.length === 0) return;
-    const nf = (filterIndex + 1) % filters.length;
-    setFilterIndex(nf);
-    void refresh({ fi: nf, sel: 0, fileSel: 0 });
+  const openRevset = () => {
+    setRevsetOpen(true);
   };
+
+  const applyRevset = (revset: string, label: string) => {
+    setRevsetOpen(false);
+    const known = effFilters.findIndex((f) => f[1] === revset);
+    if (known >= 0) {
+      setFilterIndex(known);
+      void refresh({ fi: known, sel: 0, fileSel: 0, revset });
+      return;
+    }
+    const nextExtra = [...extraFilters, [label, revset] as [string, string]];
+    setExtraFilters(nextExtra);
+    setCustomFilter([label, revset]);
+    const newIndex = filters.length + nextExtra.length - 1;
+    setFilterIndex(newIndex);
+    void refresh({ fi: newIndex, sel: 0, fileSel: 0, revset });
+  };
+
+  const configReloadRef = useRef<() => void>(() => {});
+  configReloadRef.current = () => {
+    const cfg = loadConfig();
+    setExtraFilters([]);
+    setCustomFilter(null);
+    setFilters(cfg.filters);
+    const idx = Math.max(0, Math.min(cfg.defaultIndex, cfg.filters.length - 1));
+    setFilterIndex(idx);
+    toast("Configuration reloaded", { type: "info" });
+    void refresh({
+      fi: idx,
+      sel: 0,
+      fileSel: 0,
+      revset: cfg.filters[idx]?.[1],
+    });
+  };
+
+  useEffect(() => {
+    return onConfigChanged(() => configReloadRef.current());
+  }, []);
 
   const enterMoveMode = () => {
     setMode("move");
@@ -726,7 +817,9 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     goChange,
     jumpToChange,
     mutateSelected,
+    navigate,
     openOverlay,
+    openRevset,
     enterMoveMode,
     toggleSelect,
     selectedIds,
@@ -734,7 +827,6 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     setDescribeOpen,
     copyChangeId,
     pushSelectedBookmarks,
-    cycleFilter,
   };
 
   const handleLeftPaneKeys = (key: string, ctrl: boolean): boolean => {
@@ -795,6 +887,8 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     const shift = e.modifiers?.shift ?? false;
     const ctrl = e.modifiers?.ctrl ?? false;
 
+    if (revsetOpen || restoreOpen) return;
+
     if (handleOverlayKeys(key)) return;
 
     if (mode === "move") {
@@ -820,7 +914,7 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
         : null,
     [file, patch],
   );
-  const filterLabel = filters[filterIndex]?.[0] ?? "";
+  const filterLabel = effFilters[filterIndex]?.[0] ?? "";
 
   const selChangeId =
     (mode === "move" ? moveChanges : changes)[sel]?.change_id ?? null;
@@ -933,6 +1027,38 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
         <BookmarkOverlay
           targetChangeId={overlayTarget}
           onDone={finishOverlay}
+        />
+      )}
+
+      {revsetOpen && (
+        <RevsetOverlay
+          initial={effFilters[filterIndex]?.[1] ?? ""}
+          filters={effFilters}
+          bookmarkNames={bookmarkNames}
+          changeIds={changes.map((c) => c.change_id.slice(0, 8))}
+          filePaths={files.map((f) => f.path)}
+          onApply={applyRevset}
+          onCancel={() => setRevsetOpen(false)}
+        />
+      )}
+
+      {restoreOpen && restoreFor && change && (
+        <RestoreOverlay
+          changeId={change.change_id}
+          filePath={restoreFor}
+          fileStatus={files[fileSel]?.status ?? "M"}
+          isWorkingCopy={
+            currentId !== null &&
+            change.change_id.slice(0, 8) === currentId.slice(0, 8)
+          }
+          onDone={(msg) => {
+            setRestoreOpen(false);
+            setRestoreFor(null);
+            if (msg) {
+              toast(msg, { type: "success" });
+              void loadSelectedFor(sel, changes);
+            }
+          }}
         />
       )}
     </>
