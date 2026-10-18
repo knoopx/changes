@@ -1,16 +1,8 @@
 import { useEffect, useState } from "react";
-import { Icon, KbdGroup, T, useAdwaita } from "adwaita-gpuix";
+import { Icon, KbdGroup, T, useAdwaita, groupHints, ShortcutHint, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
 import { failMessage } from "../errors";
 import { forgetBookmark, listBookmarks, setBookmarkToChange } from "../repo";
 import { BOOKMARK_OVERLAY, hints, matchShortcut } from "../shortcuts";
-import { groupHints } from "./kbd";
-import { ShortcutHint } from "./key-hint";
-import {
-  candidateRowStyle,
-  DialogFrame,
-  OverlayInput,
-  windowCandidates,
-} from "./overlay";
 
 export function BookmarkOverlay({
   targetChangeId,

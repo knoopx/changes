@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { Icon, KbdGroup, T, Textarea, useAdwaita } from "adwaita-gpuix";
+import { Icon, KbdGroup, T, Textarea, useAdwaita, groupHints, ShortcutHint } from "adwaita-gpuix";
 import { failMessage } from "../errors";
 import { describeChange } from "../repo";
 import { DESCRIBE_OVERLAY, hints, matchShortcut } from "../shortcuts";
-import { groupHints } from "./kbd";
-import { ShortcutHint } from "./key-hint";
 
 function arrowSrc(border: string, bg: string, up: boolean): string {
   const back = up ? "M0 7 L12 7 L6 0 Z" : "M0 0 L12 0 L6 7 Z";

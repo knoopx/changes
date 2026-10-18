@@ -4,7 +4,7 @@ import {
   type AdwaitaTheme,
 } from "adwaita-gpuix";
 
-export { MONO, nativeDiffTheme } from "adwaita-gpuix/vcs";
+export { MONO, nativeDiffTheme } from "adwaita-gpuix";
 
 export const adwaitaTheme: AdwaitaTheme = buildTheme("nightsky");
 

@@ -6,17 +6,20 @@ import {
   T,
   useAdwaita,
   type IconName,
+  ListRow,
+  RowIcon,
+  ScreenLayout,
+  ListPanel,
+  DiffPanel,
+  MonoBadge,
+  PanelTrailing,
+  useToast,
+  type ToastFn,
 } from "adwaita-gpuix";
 import { type ViewProps } from "../types";
 import { keyOf } from "../keybus";
-import { ListRow, RowIcon } from "../components/panel";
-import { ScreenLayout } from "../components/screen-layout";
-import { ListPanel } from "../components/virtual-list-panel";
-import { DiffPanel } from "../components/diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
-import { MonoBadge, PanelTrailing } from "../components/panel-headers";
 import { failMessage } from "../errors";
-import { useToast, type ToastFn } from "../components/toast";
 import {
   attachWorkspace,
   createWorkspace,

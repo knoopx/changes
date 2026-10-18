@@ -5,16 +5,16 @@ import {
   Spinner,
   T,
   useAdwaita,
+  ListRow,
+  ListPanel,
+  ScreenLayout,
+  DiffPanel,
+  MonoBadge,
+  useToast,
 } from "adwaita-gpuix";
 import { type OpLogEntry, type ViewProps } from "../types";
 import { keyOf } from "../keybus";
-import { ListRow } from "../components/panel";
-import { ListPanel } from "../components/virtual-list-panel";
-import { ScreenLayout } from "../components/screen-layout";
-import { DiffPanel } from "../components/diff-panel";
-import { MonoBadge } from "../components/panel-headers";
 import { failMessage } from "../errors";
-import { useToast } from "../components/toast";
 import { getOpDiff, loadOpLog, redoOp, restoreOp, splitOpDiff, undoOp } from "../repo";
 import { clampIndex } from "../indexing";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";

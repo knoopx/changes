@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { Checkbox, Spinner, StatusPage, T, useAdwaita } from "adwaita-gpuix";
+import { Checkbox, Spinner, StatusPage, T, useAdwaita, ListRow, Panel, ListPanel, useToast } from "adwaita-gpuix";
 import { type FlatHunk, type ViewProps } from "../types";
 import { keyOf } from "../keybus";
 import { useKeyEvents } from "../hooks/use-key-events";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
 import { wrapIndex } from "../indexing";
-import { ListRow, Panel } from "../components/panel";
-import { ListPanel } from "../components/virtual-list-panel";
 import { failMessage } from "../errors";
-import { useToast } from "../components/toast";
 import { type PublicInstance } from "@gpuix/react";
 import {
   discardSelectedHunks,

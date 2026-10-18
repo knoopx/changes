@@ -6,12 +6,12 @@ import {
   ViewSwitcher,
   useAdwaita,
   type ViewSwitcherItem,
+  StatusBar,
 } from "adwaita-gpuix";
 import { type View } from "./types";
 import { findWorkspaceRoot, getVcsLabel } from "./repo";
 import { createRepoWatcher } from "./watch";
 import { globalKeyHandler, keyOf } from "./keybus";
-import { StatusBar } from "./components/status-bar";
 import {
   GLOBAL,
   VIEW_SHORTCUTS,

@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react";
-import { Spinner, T, useAdwaita } from "adwaita-gpuix";
+import {
+  Spinner,
+  T,
+  useAdwaita,
+  useToast,
+  ListPanel,
+  ListRow,
+  PillGroup,
+  RowShell,
+  BookmarkPill,
+  ScreenLayout,
+  DiffPanel,
+  FileListTitle,
+  MonoBadge,
+  PanelTrailing,
+} from "adwaita-gpuix";
 import { type ViewProps } from "../types";
 import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
-import { useToast } from "../components/toast";
-import { ListPanel } from "../components/virtual-list-panel";
-import { ListRow, PillGroup, RowShell } from "../components/panel";
-import { BookmarkPill } from "../components/bookmark-pill";
-import { ScreenLayout } from "../components/screen-layout";
-import { DiffPanel } from "../components/diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
-import { FileListTitle, MonoBadge, PanelTrailing } from "../components/panel-headers";
 import { wrapIndex } from "../indexing";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
 import { useFileDiffPanelState } from "../hooks/use-file-diff-state";

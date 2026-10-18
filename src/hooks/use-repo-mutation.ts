@@ -1,4 +1,4 @@
-import { useToast } from "../components/toast";
+import { useToast } from "adwaita-gpuix";
 import { failMessage } from "../errors";
 
 export function useRepoMutation(opts: {

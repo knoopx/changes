@@ -1,26 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Checkbox, Icon, T, useAdwaita } from "adwaita-gpuix";
+import {
+  Checkbox,
+  Icon,
+  T,
+  useAdwaita,
+  useToast,
+  ListPanel,
+  ListRow,
+  PillGroup,
+  RowShell,
+  BookmarkPill,
+  ScreenLayout,
+  DiffPanel,
+  FileListTitle,
+  MonoBadge,
+  PanelTrailing,
+} from "adwaita-gpuix";
 import { type Bookmark, type Change, type View, type ViewProps } from "../types";
 import { loadConfig, onConfigChanged } from "../config";
 import { findCommandBinding, runCommand, type Command } from "../commands";
 import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
-import { useToast } from "../components/toast";
-import { ListPanel } from "../components/virtual-list-panel";
-import { ListRow, PillGroup, RowShell } from "../components/panel";
-import { BookmarkPill } from "../components/bookmark-pill";
-import { ScreenLayout } from "../components/screen-layout";
 import { BookmarkOverlay } from "../components/bookmark-overlay";
 import { RevsetOverlay } from "../components/revset-overlay";
 import { RestoreOverlay } from "../components/restore-overlay";
-import { DiffPanel } from "../components/diff-panel";
 import { ImageDiffPanel } from "../components/image-diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
-import {
-  FileListTitle,
-  MonoBadge,
-  PanelTrailing,
-} from "../components/panel-headers";
 import {
   abandonChange,
   absorbChange,

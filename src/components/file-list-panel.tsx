@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useGpuixRequired, type PublicInstance } from "@gpuix/react";
 import { useListFollow } from "../hooks/use-list-follow";
-import { FileChangeRow, type FileRowData } from "./file-row";
+import { FileChangeRow, type FileRowData } from "adwaita-gpuix";
 
 export function FileListPanel({
   files,

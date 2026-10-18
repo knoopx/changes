@@ -1,15 +1,7 @@
 import { useState } from "react";
-import { Icon, KbdGroup, T, useAdwaita, type IconName } from "adwaita-gpuix";
+import { Icon, KbdGroup, T, useAdwaita, type IconName, groupHints, ShortcutHint, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
 import { completeRevset, revsetSignatureHelp, type RevsetCandidate } from "../revsets";
 import { REVOLET_OVERLAY, hints, matchShortcut } from "../shortcuts";
-import { groupHints } from "./kbd";
-import { ShortcutHint } from "./key-hint";
-import {
-  candidateRowStyle,
-  DialogFrame,
-  OverlayInput,
-  windowCandidates,
-} from "./overlay";
 
 const KIND_ICON: Record<RevsetCandidate["kind"], IconName> = {
   filter: "list",

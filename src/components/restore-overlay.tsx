@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Checkbox, Icon, KbdGroup, T, useAdwaita } from "adwaita-gpuix";
+import { Checkbox, Icon, KbdGroup, T, useAdwaita, groupHints, ShortcutHint, DialogFrame, ListRow, useToast } from "adwaita-gpuix";
 import { useKeyEvents } from "../hooks/use-key-events";
 import { failMessage } from "../errors";
 import {
@@ -9,11 +9,6 @@ import {
 } from "../repo";
 import { RESTORE_OVERLAY, hints, matchShortcut } from "../shortcuts";
 import { MONO } from "../theme";
-import { groupHints } from "./kbd";
-import { ShortcutHint } from "./key-hint";
-import { DialogFrame } from "./overlay";
-import { ListRow } from "./panel";
-import { useToast } from "./toast";
 
 export function RestoreOverlay({
   changeId,

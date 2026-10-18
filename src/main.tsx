@@ -1,9 +1,8 @@
 import { render } from "@gpuix/react";
-import { AdwaitaContext } from "adwaita-gpuix";
+import { AdwaitaContext, ToastProvider } from "adwaita-gpuix";
 import { globalKeyHandler, keyHandler } from "./keybus";
 import { App } from "./app";
 import { adwaitaTheme } from "./theme";
-import { ToastProvider } from "./components/toast";
 import { startConfigWatcher } from "./config";
 
 startConfigWatcher();
