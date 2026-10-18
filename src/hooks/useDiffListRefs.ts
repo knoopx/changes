@@ -2,7 +2,7 @@ import { useRef } from "react";
 import type { NativeRenderer } from "@gpuix/native/host";
 import { useGpuixRequired, type PublicInstance } from "@gpuix/react";
 import { makeDiffScroller } from "adwaita-gpuix";
-import { useListFollow } from "./use-list-follow";
+import { useListFollow } from "./useListFollow";
 
 type ListRefs = {
   listRef: { current: PublicInstance | null };

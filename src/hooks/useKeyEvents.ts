@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { type WindowKeyEvent } from "../keybus";
-import { useKeyHandler } from "./use-key-handler";
+import { useKeyHandler } from "./useKeyHandler";
 
 export function useKeyEvents(handler: (e: WindowKeyEvent) => void): void {
   const keyRef = useRef<(e: WindowKeyEvent) => void>(() => {});

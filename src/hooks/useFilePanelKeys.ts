@@ -1,6 +1,6 @@
 import { getRawDiff, openFileInEditor } from "../repo";
 import type { FileChange } from "../types";
-import type { FilePanelFocus } from "./use-file-diff-state";
+import type { FilePanelFocus } from "./useFileDiffState";
 import { useToast } from "adwaita-gpuix";
 import { matchShortcut, type KeyMods, type Shortcut } from "../shortcuts";
 
