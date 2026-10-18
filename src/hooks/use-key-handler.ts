@@ -5,9 +5,12 @@ export function useKeyHandler(
   keyRef: RefObject<(e: WindowKeyEvent) => void>,
 ): void {
   useEffect(() => {
+    const prev = keyHandler.current;
     keyHandler.current = (e) => keyRef.current(e);
     return () => {
-      keyHandler.current = null;
+      
+      
+      keyHandler.current = prev;
     };
   }, []);
 }
