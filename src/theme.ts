@@ -1,8 +1,4 @@
-import {
-  buildTheme,
-  hexToRgba,
-  type AdwaitaTheme,
-} from "adwaita-gpuix";
+import { buildTheme, type AdwaitaTheme } from "adwaita-gpuix";
 
 export { MONO, nativeDiffTheme } from "adwaita-gpuix";
 
@@ -17,14 +13,6 @@ export function fileStatusColor(t: AdwaitaTheme, status: string): string {
     default:
       return t.colors.warning;
   }
-}
-
-export function selectionBg(t: AdwaitaTheme): string {
-  return t.colors.accentTint;
-}
-
-export function rowHoverBg(t: AdwaitaTheme): string {
-  return hexToRgba(t.colors.fg, 0.04);
 }
 
 export function scrimBg(t: AdwaitaTheme): string {
