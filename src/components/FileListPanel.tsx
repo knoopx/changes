@@ -1,21 +1,29 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useGpuixRequired, type PublicInstance } from "@gpuix/react";
-import { useListFollow } from "../hooks/use-list-follow";
-import { FileChangeRow, type FileRowData } from "adwaita-gpuix";
+import { useListFollow } from "../hooks/useListFollow";
+import {
+  FileChangeRow,
+  fileRowStats,
+  type FileRowData,
+} from "adwaita-gpuix";
 
 export function FileListPanel({
   files,
   selected,
   onSelect,
+  focused = true,
   estimatedItemHeight = 22,
 }: {
   files: FileRowData[];
   selected: number;
   onSelect: (index: number) => void;
+  
+  focused?: boolean;
   estimatedItemHeight?: number;
 }) {
   const listRef = useRef<PublicInstance | null>(null);
   const renderer = useGpuixRequired();
+  const stats = useMemo(() => fileRowStats(files), [files]);
   const { ensureVisible } = useListFollow(listRef, renderer, 28);
 
   useEffect(() => {
@@ -38,7 +46,9 @@ export function FileListPanel({
         <FileChangeRow
           key={f.path + i}
           file={f}
+          stats={stats}
           selected={i === selected}
+          focused={focused}
           onClick={() => onSelect(i)}
         />
       ))}
