@@ -22,6 +22,7 @@ import {
 import { ChangesView } from "./screens/changes";
 import { BookmarksView } from "./screens/bookmarks";
 import { OpLogView } from "./screens/oplog";
+import { EvologView } from "./screens/evolog";
 import { HunksView } from "./screens/hunks";
 import { WorkspacesView } from "./screens/workspaces";
 
@@ -75,7 +76,8 @@ export function App() {
       });
       if (!m) return false;
       const kind = viewRef.current.kind;
-      const idx = kind === "hunks" ? 0 : MAIN_VIEWS.indexOf(kind);
+      const idx =
+        kind === "hunks" || kind === "evolog" ? 0 : MAIN_VIEWS.indexOf(kind);
       const n = MAIN_VIEWS.length;
       const next = m.id === "view-right" ? (idx + 1) % n : (idx + n - 1) % n;
       setView({ kind: MAIN_VIEWS[next] });
@@ -146,6 +148,13 @@ export function App() {
         )}
         {view.kind === "oplog" && (
           <OpLogView navigate={navigate} onHints={setHints} />
+        )}
+        {view.kind === "evolog" && (
+          <EvologView
+            changeId={view.changeId}
+            navigate={navigate}
+            onHints={setHints}
+          />
         )}
         {view.kind === "hunks" && (
           <HunksView

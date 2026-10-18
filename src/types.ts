@@ -83,6 +83,7 @@ export type View =
   | { kind: "changes" }
   | { kind: "bookmarks" }
   | { kind: "oplog" }
+  | { kind: "evolog"; changeId: string }
   | { kind: "hunks"; changeId: string; filePath?: string }
   | { kind: "workspaces" };
 
