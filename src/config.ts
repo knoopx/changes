@@ -1,7 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { appConfigPath, loadJsonConfig } from "adwaita-gpuix";
 import { REVISION_FILTERS } from "./types";
+import { createConfigWatcher, type RepoWatcher } from "./watch";
 
 export interface FilterDef {
   label: string;
@@ -16,13 +15,6 @@ export interface ResolvedFilters {
 
 export const DEFAULT_FILTER_LABEL = "Stack";
 
-export function configPath(): string {
-  return (
-    process.env.GPUIX_CHANGES_CONFIG ??
-    join(homedir(), ".config", "changes", "config.json")
-  );
-}
-
 interface RawConfig {
   filters?: FilterDef[];
   defaultFilter?: string;
@@ -35,13 +27,9 @@ function defaultFilters(): ResolvedFilters {
 }
 
 export function loadConfig(): ResolvedFilters {
-  let raw: RawConfig | undefined;
-  try {
-    const path = configPath();
-    if (existsSync(path)) {
-      raw = JSON.parse(readFileSync(path, "utf8")) as RawConfig;
-    }
-  } catch {}
+  const raw = loadJsonConfig<RawConfig>(
+    appConfigPath("changes", "GPUIX_CHANGES_CONFIG"),
+  );
 
   if (!raw || typeof raw !== "object") return defaultFilters();
 
@@ -62,4 +50,21 @@ export function loadConfig(): ResolvedFilters {
   const label = raw.defaultFilter ?? DEFAULT_FILTER_LABEL;
   const idx = filters.findIndex((f) => f[0] === label);
   return { filters, defaultIndex: idx >= 0 ? idx : 0 };
+}
+
+const configListeners = new Set<() => void>();
+let configWatcher: RepoWatcher | null = null;
+
+export function onConfigChanged(fn: () => void): () => void {
+  configListeners.add(fn);
+  return () => {
+    configListeners.delete(fn);
+  };
+}
+
+export function startConfigWatcher(): void {
+  if (configWatcher) return;
+  configWatcher = createConfigWatcher(() => {
+    for (const fn of configListeners) fn();
+  });
 }

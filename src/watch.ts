@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { appConfigPath } from "adwaita-gpuix";
 
 export interface RepoWatcher {
   stop(): void;
@@ -21,6 +22,52 @@ function sample(t: Target): string | number | null {
   } catch {
     return null;
   }
+}
+
+export function createConfigWatcher(onChange: () => void): RepoWatcher {
+  const path = appConfigPath("changes", "GPUIX_CHANGES_CONFIG");
+  const sample = (): string | number => {
+    try {
+      return statSync(path).mtimeMs;
+    } catch {
+      return ""; 
+    }
+  };
+
+  let lastSeen: string | number | null = null;
+  let baseline = false;
+  let stopped = false;
+  let debounce: ReturnType<typeof setTimeout> | null = null;
+
+  const tick = () => {
+    const v = sample();
+    if (!baseline) {
+      baseline = true;
+      lastSeen = v;
+      return;
+    }
+    if (v === lastSeen) return;
+    lastSeen = v;
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      debounce = null;
+      if (!stopped) onChange();
+    }, DEBOUNCE_MS);
+  };
+
+  const interval = setInterval(tick, POLL_MS);
+  tick();
+
+  return {
+    stop() {
+      stopped = true;
+      clearInterval(interval);
+      if (debounce) {
+        clearTimeout(debounce);
+        debounce = null;
+      }
+    },
+  };
 }
 
 export function createRepoWatcher(

@@ -4,6 +4,9 @@ import { globalKeyHandler, keyHandler } from "./keybus";
 import { App } from "./app";
 import { adwaitaTheme } from "./theme";
 import { ToastProvider } from "./components/toast";
+import { startConfigWatcher } from "./config";
+
+startConfigWatcher();
 
 render(
   <AdwaitaContext.Provider value={adwaitaTheme}>
