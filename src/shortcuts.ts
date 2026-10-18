@@ -1,31 +1,14 @@
 import { type View } from "./types";
+import {
+  type Shortcut,
+  type KeyMods,
+  matchShortcut,
+  hints,
+  NAV,
+  PAGED_NAV,
+} from "adwaita-gpuix";
 
 export type Kbd = string | string[];
-
-export interface Shortcut {
-  
-  id: string;
-  
-  kbds: Kbd[];
-  
-  desc: string;
-  
-  hint?: boolean;
-}
-
-export interface KeyMods {
-  ctrl?: boolean;
-  shift?: boolean;
-  alt?: boolean;
-  cmd?: boolean;
-}
-
-const MODIFIER_IDS: Record<string, keyof KeyMods> = {
-  ctrl: "ctrl",
-  shift: "shift",
-  alt: "alt",
-  cmd: "cmd",
-};
 
 function bindingMatches(
   binding: Kbd,
