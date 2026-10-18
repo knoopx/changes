@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "bun --hot src/main.tsx",
     "typecheck": "tsc --noEmit",
+    "storybook": "storybook .",
     "build": "cp node_modules/@gpuix/native-linux-x64-gnu/gpuix-native.linux-x64-gnu.node gpuix-native.linux-x64-gnu.node && bun build --compile src/main.tsx --outfile dist/changes --asset gpuix-native.linux-x64-gnu.node && trash gpuix-native.linux-x64-gnu.node"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@types/node": "^26.6.5",
     "@types/react": "^19.0.0",
+    "storybook": "workspace:*",
     "typescript": "^5.5.0"
   }
 }
