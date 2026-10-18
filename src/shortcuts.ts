@@ -10,59 +10,8 @@ import {
 
 export type Kbd = string | string[];
 
-function bindingMatches(
-  binding: Kbd,
-  key: string,
-  mods: KeyMods,
-): boolean {
-  const codes = Array.isArray(binding) ? binding : [binding];
-  const code = codes[codes.length - 1];
-  if (code !== key) return false;
-  for (let i = 0; i < codes.length - 1; i++) {
-    const m = MODIFIER_IDS[codes[i]];
-    if (m && !mods[m]) return false;
-  }
-  return true;
-}
-
-export function matchShortcut(
-  set: Shortcut[],
-  key: string,
-  mods: KeyMods = {},
-): Shortcut | null {
-  let best: Shortcut | null = null;
-  let bestScore = -1;
-  for (const s of set) {
-    for (const b of s.kbds) {
-      if (!bindingMatches(b, key, mods)) continue;
-      const score = (Array.isArray(b) ? b : [b]).length - 1; 
-      if (score > bestScore) {
-        best = s;
-        bestScore = score;
-      }
-    }
-  }
-  return best;
-}
-
-export function hints(set: Shortcut[]): Shortcut[] {
-  return set.filter((s) => s.hint !== false);
-}
-
-const NAV: Shortcut[] = [
-  { id: "up", kbds: ["up"], desc: "nav" },
-  { id: "down", kbds: ["down"], desc: "nav" },
-  { id: "home", kbds: ["home"], desc: "nav", hint: false },
-  { id: "end", kbds: ["end"], desc: "nav", hint: false },
-];
-const PAGED_NAV: Shortcut[] = [
-  NAV[0],
-  NAV[1],
-  { id: "page-up", kbds: ["pageup"], desc: "nav", hint: false },
-  { id: "page-down", kbds: ["pagedown"], desc: "nav", hint: false },
-  NAV[2],
-  NAV[3],
-];
+export type { Shortcut, KeyMods };
+export { matchShortcut, hints };
 
 export const CHANGES_LEFT: Shortcut[] = [
   ...PAGED_NAV,
@@ -71,8 +20,10 @@ export const CHANGES_LEFT: Shortcut[] = [
   { id: "edit", kbds: ["e"], desc: "edit" },
   { id: "split", kbds: ["s"], desc: "split" },
   { id: "squash", kbds: ["f"], desc: "squash" },
+  { id: "absorb", kbds: ["a"], desc: "absorb" },
   { id: "revert", kbds: ["r"], desc: "revert" },
   { id: "bookmark", kbds: ["b"], desc: "bm" },
+  { id: "evolog", kbds: ["v"], desc: "evolog" },
   { id: "move", kbds: ["enter"], desc: "move" },
   { id: "select", kbds: ["space"], desc: "sel" },
   { id: "describe", kbds: ["d"], desc: "desc" },
@@ -104,6 +55,7 @@ export const CHANGES_RIGHT: Shortcut[] = [
   { id: "open", kbds: ["e"], desc: "open" },
   { id: "split", kbds: ["s"], desc: "split" },
   { id: "discard", kbds: ["d"], desc: "discard" },
+  { id: "restore-hunks", kbds: ["i"], desc: "rest" },
   { id: "hunks", kbds: ["h"], desc: "hunks" },
   { id: "back", kbds: ["q"], desc: "back", hint: false },
   { id: "view", kbds: [["ctrl", "left"], ["ctrl", "right"]], desc: "view" },
@@ -173,8 +125,31 @@ export const OPLOG: Shortcut[] = [
   ...NAV,
   { id: "restore", kbds: ["r"], desc: "restore" },
   { id: "undo", kbds: ["u"], desc: "undo" },
+  { id: "redo", kbds: [["shift", "u"]], desc: "redo" },
   { id: "back", kbds: ["q", "escape"], desc: "back" },
   { id: "view", kbds: [["ctrl", "left"], ["ctrl", "right"]], desc: "view" },
+];
+
+export const EVOLONG: Shortcut[] = [
+  ...NAV,
+  { id: "back", kbds: ["q", "escape"], desc: "back" },
+  { id: "view", kbds: [["ctrl", "left"], ["ctrl", "right"]], desc: "view" },
+];
+
+export const REVOLET_OVERLAY: Shortcut[] = [
+  { id: "type", kbds: ["type"], desc: "revset", hint: false },
+  { id: "nav-up", kbds: ["up"], desc: "nav" },
+  { id: "nav-down", kbds: ["down"], desc: "nav" },
+  { id: "apply", kbds: ["enter"], desc: "apply" },
+  { id: "cancel", kbds: ["escape"], desc: "cancel" },
+];
+
+export const RESTORE_OVERLAY: Shortcut[] = [
+  { id: "select", kbds: ["space"], desc: "select" },
+  { id: "nav-up", kbds: ["up"], desc: "nav" },
+  { id: "nav-down", kbds: ["down"], desc: "nav" },
+  { id: "apply", kbds: [["ctrl", "enter"], ["cmd", "enter"]], desc: "apply" },
+  { id: "cancel", kbds: ["escape"], desc: "cancel" },
 ];
 
 export const HUNKS: Shortcut[] = [
@@ -228,6 +203,7 @@ export const VIEW_SHORTCUTS: Record<View["kind"], Shortcut[]> = {
   changes: CHANGES_LEFT,
   bookmarks: BOOKMARKS_LEFT,
   oplog: OPLOG,
+  evolog: EVOLONG,
   hunks: HUNKS,
   workspaces: WS_LEFT,
 };
