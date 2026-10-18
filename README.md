@@ -15,9 +15,16 @@ Browse and manipulate a jj repository from a single window:
   image files get a before/after comparison. Create, edit, split, squash,
   revert, and abandon changes; reorder them in move mode; multi-select and
   describe in one go; set or create bookmarks from a typeahead overlay; copy
-  the change id; push a change's bookmarks; open a file in your editor. A
-  revision filter is cycled in place; the filter set and the starting filter
-  are user-configurable (see [Configuration](#configuration)).
+  the change id; push a change's bookmarks; open a file in your editor.
+  Absorb a change into its mutable ancestors (`a`); open the change's
+  evolog (`v`) to see how it evolved across operations, with a per-version
+  diff (`q` back). The revision filter is cycled in place, or edited in
+  place (`/`) — an editable revset with autocompletion (functions,
+  keywords, bookmarks, change ids, file globs) and signature help; Enter
+  applies a custom filter, Esc cancels. On a file, interactive restore (`i`)
+  restores a working-copy file per hunk: space marks hunks, Ctrl+Enter
+  applies. The filter set and the starting filter are user-configurable
+  (see [Configuration](#configuration)).
 
   ![Changes view — commit-graph gutter, file list, and native diff preview](assets/screenshot-changes.png)
   *Changes view: commit-graph gutter + file list + table diff preview.*
@@ -30,7 +37,8 @@ Browse and manipulate a jj repository from a single window:
   *Bookmarks view: bookmark groups + file list + unified-diff preview.*
 
 - **Op log** — the last 100 operations, each previewing the changes it
-  introduced as a diff; restore to any operation, or undo the latest one.
+  introduced as a diff; restore to any operation, undo the latest one,
+  or redo the last undone operation (Shift+U).
 
   ![Op-log view — operation history with diff preview](assets/screenshot-oplog.png)
   *Op-log view: operation history + diff of the operation's changes.*
@@ -100,4 +108,5 @@ Copy `examples/config.json` to get started.
 
 Only the keys you provide are applied: omit `filters` to keep the built-in
 list, omit `defaultFilter` to start on Stack. Any revset jj accepts works
-(`@`, `bookmark(main)`, `description(my ~)`, ...).
+(`@`, `bookmark(main)`, `description(my ~)`, ...). Edits to the config file
+are hot-reloaded at runtime — no restart needed.
