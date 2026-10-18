@@ -13,6 +13,28 @@ export type Kbd = string | string[];
 export type { Shortcut, KeyMods };
 export { matchShortcut, hints };
 
+const MODIFIER_IDS: Record<string, keyof KeyMods> = {
+  ctrl: "ctrl",
+  shift: "shift",
+  alt: "alt",
+  cmd: "cmd",
+};
+
+export function bindingMatches(
+  binding: Kbd,
+  key: string,
+  mods: KeyMods,
+): boolean {
+  const codes = Array.isArray(binding) ? binding : [binding];
+  const code = codes[codes.length - 1];
+  if (code !== key) return false;
+  for (let i = 0; i < codes.length - 1; i++) {
+    const m = MODIFIER_IDS[codes[i]];
+    if (m && !mods[m]) return false;
+  }
+  return true;
+}
+
 export const CHANGES_LEFT: Shortcut[] = [
   ...PAGED_NAV,
   { id: "focus-right", kbds: ["tab"], desc: "focus" },

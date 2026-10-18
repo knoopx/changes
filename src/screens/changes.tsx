@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox, Icon, T, useAdwaita } from "adwaita-gpuix";
 import { type Bookmark, type Change, type View, type ViewProps } from "../types";
 import { loadConfig, onConfigChanged } from "../config";
+import { findCommandBinding, runCommand, type Command } from "../commands";
 import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
 import { useToast } from "../components/toast";
@@ -24,6 +25,7 @@ import {
   abandonChange,
   absorbChange,
   editChange,
+  findWorkspaceRoot,
   getRawDiff,
   getCurrentChangeId,
   listBookmarks,
@@ -400,6 +402,9 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
   const [filterIndex, setFilterIndex] = useState(
     initialConfig.current.defaultIndex,
   );
+  const [commands, setCommands] = useState<Command[]>(
+    initialConfig.current.commands,
+  );
   const [customFilter, setCustomFilter] = useState<
     readonly [string, string] | null
   >(null);
@@ -645,6 +650,7 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     setExtraFilters([]);
     setCustomFilter(null);
     setFilters(cfg.filters);
+    setCommands(cfg.commands);
     const idx = Math.max(0, Math.min(cfg.defaultIndex, cfg.filters.length - 1));
     setFilterIndex(idx);
     toast("Configuration reloaded", { type: "info" });
@@ -750,14 +756,20 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
   );
 
   useEffect(() => {
-    onHints?.(
+    const commandShortcuts = commands.map((c) => ({
+      id: c.id,
+      kbds: c.keys,
+      desc: c.id,
+      hint: true as const,
+    }));
+    const base =
       mode === "move"
-        ? hints(CHANGES_MOVE)
+        ? CHANGES_MOVE
         : focus === "left"
-          ? hints(CHANGES_LEFT)
-          : hints(CHANGES_RIGHT),
-    );
-  }, [focus, mode]);
+          ? CHANGES_LEFT
+          : CHANGES_RIGHT;
+    onHints?.(hints([...base, ...commandShortcuts]));
+  }, [focus, mode, commands]);
 
   const pushSelectedBookmarks = async () => {
     const chp = changes[sel];
@@ -888,6 +900,27 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     const ctrl = e.modifiers?.ctrl ?? false;
 
     if (revsetOpen || restoreOpen) return;
+
+    const mods = {
+      ctrl: e.modifiers?.ctrl ?? false,
+      cmd: e.modifiers?.cmd ?? false,
+      shift: e.modifiers?.shift ?? false,
+    };
+    const cmd = findCommandBinding(commands, key, mods);
+    if (cmd) {
+      const ch = changes[sel];
+      runCommand(cmd, {
+        root: findWorkspaceRoot(),
+        change: ch?.change_id ?? "",
+        changes:
+          selectedIds.size > 0
+            ? Array.from(selectedIds)
+            : ch
+              ? [ch.change_id]
+              : [],
+      });
+      return;
+    }
 
     if (handleOverlayKeys(key)) return;
 

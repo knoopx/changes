@@ -1,10 +1,87 @@
 {
   "filters": [
-    { "label": "Stack", "revset": "ancestors(@) ~ root()" },
-    { "label": "All", "revset": "::" },
-    { "label": "Mine", "revset": "mine()" },
-    { "label": "Tracked", "revset": "bookmarks()" },
-    { "label": "Recent", "revset": "committer_date(after:'30 days ago')" }
+    {
+      "label": "Stack",
+      "revset": "ancestors(@) ~ root()"
+    },
+    {
+      "label": "All",
+      "revset": "::"
+    },
+    {
+      "label": "Mine",
+      "revset": "mine()"
+    },
+    {
+      "label": "Tracked",
+      "revset": "bookmarks()"
+    },
+    {
+      "label": "Recent",
+      "revset": "committer_date(after:'30 days ago')"
+    }
   ],
-  "defaultFilter": "Stack"
+  "defaultFilter": "Stack",
+  "commands": [
+    {
+      "id": "describe",
+      "keys": [
+        [
+          "ctrl",
+          "shift",
+          "d"
+        ]
+      ],
+      "cmd": "kitty",
+      "args": [
+        "@",
+        "launch",
+        "--type=os-window",
+        "--cwd",
+        "{root}",
+        "pi",
+        "Describe jujutsu changes {changes} using Conventional Commits format.\n\n<context>\n- Current working directory: `{root}`\n- Jujutsu workspace root: `{root}`\n- File paths in change diffs are relative to the workspace root. The vcs tools auto-detect the repo by walking up from `{root}`, so no manual path juggling is needed.\n</context>\n\nUse the **conventional-commits** skill for type/scope rules.\nUse the **sem** skill to understand actual code changes vs cosmetic modifications.\n\n<format>\n`<type>(<scope>): <description>`\n\n**Scope is required** - always include a scope in parentheses.\n\nExamples:\n- `feat(auth): add passwordless login`\n- `fix(api): handle empty pagination cursor`\n- `chore(deps): bump react to 18.3.0`\n\nType selection:\n- Users see new behavior → `feat`\n- Users see corrected behavior → `fix`\n- Otherwise → `chore` or more specific type (`refactor`, `build`, `ci`, `test`, `docs`, `perf`, `style`)\n\nScope guidelines:\n- Use a short noun: `api`, `auth`, `ui`, `db`, `cli`, `deps`, `docs`, `agent`, `lint`, `build`\n- Use repo/module/package name when working in a monorepo\n- If unsure, use a generic scope like `core`, `general`, or `misc`\n\nDescription guidelines:\n- Use imperative mood: \"add\", \"fix\", \"remove\", \"update\"\n- No ending punctuation\n- Be specific; avoid \"changes\", \"stuff\", \"update things\", \"refactor\", \"improve\"\n- Describe actual content, not generic categories. Name what was added/changed, not that \"rules\" or \"principles\" were added.\n- Name the specific files, modules, functions, or features touched\n- Name the specific behavior change: what old thing was replaced, what new thing was added\n- If multiple distinct changes, list them: \"add X, remove Y, rename Z\"\n- NEVER use vague words: \"improvements\", \"updates\", \"adjustments\", \"enhancements\", \"modifications\"\n- NEVER say \"refactor\" in the description itself — the type already says refactor\n\nBad examples (vague, generic):\n- \"add behavioral guidelines and core principles\"\n- \"add agent operating principles\"\n- \"add behavior rules\"\n- \"update configuration\"\n- \"improve error handling\"\n- \"refactor module structure\"\n\nGood examples (specific, concrete):\n- \"add rules for dead code removal, build verification, security, debugging, architecture, and tool usage\"\n- \"replace emulationDir with Home Manager options for mame, melonds, mgba, pcsx2, ppsspp, xemu, retroarch\"\n- \"remove cfg/options/config wrapper from audio, hardware, power, services, and users modules\"\n- \"add retroarch core modules for dc, gbc, n64, saturn, snes with ES-DE system definitions\"\n- \"consolidate retroarch config from 15 separate .cfg files into single retroarch.cfg\"\n</format>\n\n<sem-guidance>\n- If sem shows all changes are `~` (cosmetic) → use `style:` or `format:`\n- If sem shows `∆` (modified) → describe the actual behavior change\n- If sem shows `+` or `-` → describe additions/removals\n- Large file counts don't always mean large changes — sem reveals the truth\n</sem-guidance>\n\n<constraints>\n- **NO PARALLEL EXECUTION** — Describe each commit sequentially, one at a time. Complete all steps for one commit before starting the next. Running tool calls in parallel across commits will cause incorrect or mixed results.\n- **PRESERVE COMMIT ORDER** — Describe commits in the order listed above (newer first). The first commit in the list is the newest and should be described first.\n</constraints>\n\n<workflow>\nFor each change ID in the list above, in the order listed (newest first), do:\n1. Get git hash: `vcs-log(rev=\"<change-id>\", format=\"full\")` — read the `hash` column (git commit hash) from the row\n   Check semantic changes: `sem diff --commit <hash-from-step-1>` (use the hash, NOT parent!)\n   Check changed files and hunks: `vcs-hunk-list(rev=\"<change-id>\")` — the hunk table lists each changed file with its content-addressed hunk IDs\n   If needed for context, inspect patch: `vcs-file-diff(path=\"*\", rev=\"<change-id>\")` — whole-tree unified diff against the parent\n   Describe: `vcs-describe(hash=\"<change-id>\", message=\"<type>(<scope>): <description>\")`\n\n   **VERIFY AFTER DESCRIBE** — `vcs-describe` moves the working copy. Never use `@` to verify; always re-query by the original change ID:\n   `vcs-log(rev=\"<change-id>\", format=\"compact\")`\n   Confirm the row shows the correct change ID and your new description. If verification fails, the change ID may have been rebased — widen the scope (e.g. `vcs-log(rev=\"all()\", format=\"full\")`) and look for the new description in the rows.\n</workflow>\n\n<template-notes>\n- In `vcs-log` rows, `hash` is the git commit hash and `change` is the jj change ID; use `format=\"full\"` to read the git hash\n- When using multiple change IDs, pass a pipe-alternation revset to the tool: `vcs-log(rev=\"id1 | id2\", format=\"full\")`\n- After `vcs-describe`, the working copy (`@`) moves — always verify with the original change ID, not `@`\n- Use `rev=\"<change-id>\"` for ALL post-desc commands: vcs-log, vcs-hunk-list, vcs-file-diff — the change ID is stable even after rebase\n</template-notes>"
+      ]
+    },
+    {
+      "id": "split",
+      "keys": [
+        [
+          "ctrl",
+          "shift",
+          "s"
+        ]
+      ],
+      "cmd": "kitty",
+      "args": [
+        "@",
+        "launch",
+        "--type=os-window",
+        "--cwd",
+        "{root}",
+        "pi",
+        "Split jujutsu change(s) {changes} into semantically logical commits — by file boundary (vcs-file-split) or by hunk (vcs-hunk-split), chosen by change composition.\n\nWhen multiple change IDs are given, apply this workflow to each change in order (newest first), one at a time; `<change-id>` below is the change currently being processed.\n\n<context>\n- Current working directory: `{root}`\n- Jujutsu workspace root: `{root}`\n- File paths in change diffs are relative to the workspace root. The vcs tools auto-detect the repo by walking up from `{root}`, so no manual path juggling is needed.\n</context>\n\n<granularity>\nChoose the split granularity per logical grouping based on change composition:\n- **File boundary** — a grouping is a whole set of files → use `vcs-file-split` (drives `jj split`): the named files go to the FIRST/bottom commit (which takes the message), every other file moves to a new child commit.\n- **Within a file** — a grouping is part of one file → use `vcs-hunk-split`: the selected hunks stay in the target commit (which takes the message), every unselected hunk moves to a new child commit.\nYou can mix both across iterations of the same change.\n</granularity>\n\n<workflow>\n1. Get git hash: `vcs-log(rev=\"<change-id>\", format=\"full\")` — read the `hash` column (git commit hash) from the row\n2. Check semantic changes: `sem diff --commit <hash-from-step-1>` (use the hash, NOT parent!)\n3. List changed files and hunks: `vcs-hunk-list(rev=\"<change-id>\")` — the hunk table lists each changed file with its content-addressed hunk IDs; the `files` column of `vcs-log` gives the full file list for file-boundary splits\n4. Identify logical groupings by domain/purpose using sem output; choose the granularity per grouping (file boundary → `vcs-file-split`, within-file → `vcs-hunk-split`) and map each grouping to its files or hunks\n5. Split iteratively:\n   - File-boundary split: `vcs-file-split(rev=\"<change-id>\", files=[\"<file>\", ...], message=\"feat(scope): add feature A\")` — the named files go to the FIRST/bottom commit (which takes the message); every other file moves to a new child commit (note its new change ID from the output). Re-run on the new child commit to peel off the next file group.\n   - Within-file (hunk) split: `vcs-hunk-split(rev=\"<change-id>\", hunks=[\"<file>=<hunk-id>\", ...], message=\"feat(scope): add feature A\")` — the target commit keeps the selected hunks and takes the message; every unselected hunk moves to a new child commit (note its new change ID from the output). Re-run `vcs-hunk-list` on the new child commit to read its remaining hunk IDs, then `vcs-hunk-split(rev=\"<new-child-change-id>\", hunks=[\"<file>=<hunk-id>\", ...], message=\"fix(scope): resolve issue B\")`.\n   - Each iteration keeps the selected files/hunks in the current commit and pushes the rest to a new child commit\n   - Continue until all logical groupings are separated\n6. Update remaining change description: `vcs-describe(hash=\"<change-id>\", message=\"chore(scope): update remaining files\")`\n7. **VERIFY** — After each `vcs-file-split` / `vcs-hunk-split` / `vcs-describe`, verify using the original change ID (not `@`):\n   `vcs-log(rev=\"<change-id>\", format=\"compact\")` — the `change` and description columns show the new description\n</workflow>\n\n<split-explanation>\n- Choose granularity by change composition: whole-file groupings use `vcs-file-split` (named files → bottom commit, rest → new child commit); within-file groupings use `vcs-hunk-split` (selected hunks stay, unselected hunks → new child commit)\n- Each split keeps the selected files/hunks in the current commit and pushes the rest to a new child commit stacked on top\n- For iterative splitting, work down the chain: split the original, then split the new child commit, then its child, creating a chain:\n  `original -> new1 -> new2 -> new3...`\n- For hunk splits, always re-run `vcs-hunk-list` on the most recent child commit to read its remaining hunk IDs before the next split — content-addressed hunk IDs are stable, but the set of remaining hunks shrinks each step. For file splits, re-read the remaining files from `vcs-log` / `vcs-file-diff` on the child commit.\n- **Important**: Split sequentially, one grouping at a time, waiting for each split to complete before starting the next. Each split rewrites the target commit, so running splits out of order or in parallel can introduce merge conflicts.\n</split-explanation>\n\n<sem-guidance>\n- Use sem to identify actual behavioral changes vs cosmetic modifications\n- Group files by semantic entities (functions, classes, types) that were changed\n- If sem shows all changes are `~` (cosmetic), consider keeping as a single style/format commit\n- Split commits by semantic boundaries, not just file boundaries\n- Large file counts don't always mean large changes — sem reveals the truth\n</sem-guidance>\n\n**All commit messages MUST use Conventional Commits format: `type(scope): description`.**\n- Scope is always required. Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`.\n- Use the **conventional-commits** skill for full rules.\n- Use the **sem** skill to understand actual code changes vs cosmetic modifications.\n- Descriptions MUST be specific: name the files, modules, functions, or features touched\n- NEVER use vague words: \"improvements\", \"updates\", \"adjustments\", \"enhancements\", \"modifications\"\n- NEVER say \"refactor\" in the description — the type already says refactor"
+      ]
+    },
+    {
+      "id": "inspect",
+      "keys": [
+        [
+          "ctrl",
+          "shift",
+          "i"
+        ]
+      ],
+      "cmd": "kitty",
+      "args": [
+        "@",
+        "launch",
+        "--type=os-window",
+        "--cwd",
+        "{root}",
+        "pi",
+        "Review the jujutsu change(s) {changes} using entity-level code analysis.\n\nWhen multiple change IDs are given, apply this workflow to each change in order (newest first); `<change-id>` below is the change currently being processed.\n\n<workflow>\n1. Get git hash: `vcs-log(rev=\"<change-id>\", format=\"full\")` — read the `hash` column (git commit hash) from the row\n2. Run code review: `code-review(target=\"<hash-from-step-1>\")`\n3. Analyze the entity-level review output (risk scores, changed entities, blast radius)\n4. Address all issues found by code-review\n</workflow>\n\n<template-notes>\n- Always use `rev=\"<change-id>\"` for the vcs tools — never use `@` unless explicitly targeting the working copy\n</template-notes>"
+      ]
+    }
+  ]
 }
