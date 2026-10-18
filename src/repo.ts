@@ -665,9 +665,175 @@ export async function undoOp(): Promise<string> {
   return "Undid operation";
 }
 
+export async function redoOp(): Promise<string> {
+  await jjOk(["redo"]);
+  return "Redid operation";
+}
+
 export async function restoreOp(opId: string): Promise<string> {
   await jjOk(["op", "restore", opId]);
   return `Restored to operation ${opId.slice(0, 8)}`;
+}
+
+export async function absorbChange(changeId: string): Promise<string> {
+  await jjOk(["absorb", "-f", changeId]);
+  return `Absorbed change ${changeId.slice(0, 8)}`;
+}
+
+
+
+export interface EvologEntry {
+  commit_id: string;
+  description: string;
+  author: string;
+  timestamp: string;
+}
+
+const EVOLONG_TEMPLATE =
+  'commit.commit_id() ++ "\t" ++ commit.description().first_line() ++ "\t" ++ ' +
+  'commit.author().name() ++ "\t" ++ ' +
+  'commit.author().timestamp().format("%Y-%m-%d %H:%M:%S") ++ "\n"';
+
+export async function loadEvolog(
+  changeId: string,
+  limit = 50,
+): Promise<EvologEntry[]> {
+  const out = await jjOk([
+    "evolog",
+    "-r",
+    changeId,
+    "-n",
+    String(limit),
+    "--no-graph",
+    "--color",
+    "never",
+    "-T",
+    EVOLONG_TEMPLATE,
+  ]);
+  const entries: EvologEntry[] = [];
+  for (const line of out.split("\n")) {
+    if (line.trim().length === 0) continue;
+    const parts = line.split("\t");
+    if (parts.length < 4) continue;
+    entries.push({
+      commit_id: parts[0] ?? "",
+      description: sanitizeDescription(parts[1] ?? ""),
+      author: (parts[2] ?? "").trim(),
+      timestamp: parts[3] ?? "",
+    });
+  }
+  return entries;
+}
+
+
+export async function getEvologDiff(commitId: string): Promise<string> {
+  const res = await jj(["diff", "--git", "-r", commitId]);
+  return res.code === 0 ? res.stdout : "";
+}
+
+
+
+export interface RestoreHunk {
+  index: number;
+  
+  postStart: number;
+  
+  postLines: number;
+  
+  preLines: string[];
+  
+  label: string;
+}
+
+
+export function parseRestoreHunks(patch: string): RestoreHunk[] {
+  const lines = patch.split("\n");
+  
+  
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  const hunks: RestoreHunk[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(
+      lines[i] ?? "",
+    );
+    if (!m) continue;
+    const postStart = parseInt(m[3] ?? "1", 10);
+    const postLines =
+      m[4] !== undefined ? parseInt(m[4], 10) : postStart > 0 ? 1 : 0;
+    const preLines: string[] = [];
+    let j = i + 1;
+    while (j < lines.length) {
+      const l = lines[j] ?? "";
+      if (l.startsWith("diff --git") || l.startsWith("@@")) break;
+      if (l.startsWith("-")) preLines.push(l.slice(1));
+      else if (l.startsWith(" ") || l === "") preLines.push(l.slice(1));
+      else if (l.startsWith("+")) {
+        
+      }
+      j++;
+    }
+    hunks.push({
+      index: hunks.length,
+      postStart,
+      postLines,
+      preLines,
+      label: `${postStart}:${postLines}`,
+    });
+    i = j - 1;
+  }
+  return hunks;
+}
+
+export async function getFileRestoreHunks(
+  changeId: string,
+  filePath: string,
+): Promise<RestoreHunk[]> {
+  const patch = (await jj(["diff", "--git", "-r", changeId, filePath]))
+    .stdout;
+  return parseRestoreHunks(patch);
+}
+
+
+export async function getFileContentAt(
+  changeId: string,
+  filePath: string,
+): Promise<string> {
+  const out = await jjOk(["file", "show", filePath, "-r", changeId]);
+  return out;
+}
+
+
+export function buildRestoredContent(
+  current: string,
+  selected: RestoreHunk[],
+): string {
+  const lines = current.split("\n");
+  const ordered = [...selected].sort(
+    (a, b) => b.postStart - a.postStart || b.postLines - a.postLines,
+  );
+  for (const h of ordered) {
+    const start = h.postStart - 1;
+    const end = h.postLines > 0 ? start + h.postLines : start;
+    lines.splice(start, end - start, ...h.preLines);
+  }
+  return lines.join("\n");
+}
+
+
+export async function applyRestoreHunks(
+  changeId: string,
+  filePath: string,
+  selected: RestoreHunk[],
+): Promise<string> {
+  const current = await getFileContentAt(changeId, filePath);
+  const next = buildRestoredContent(current, selected);
+  const root = findWorkspaceRoot();
+  const target = join(root, filePath);
+  mkdirSync(dirname(target), { recursive: true });
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(target, next);
+  await jjOkQuiet(["util", "snapshot"]);
+  return `Restored ${selected.length} hunk(s) of '${filePath}'`;
 }
 
 export async function rebaseChange(
