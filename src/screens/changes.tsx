@@ -74,6 +74,7 @@ import {
   CHANGES_RIGHT,
   hints,
   matchShortcut,
+  type Shortcut,
 } from "../shortcuts";
 
 type Mode = "normal" | "move";
@@ -761,19 +762,30 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
   );
 
   useEffect(() => {
-    const commandShortcuts = commands.map((c) => ({
-      id: c.id,
-      kbds: c.keys,
-      desc: c.id,
-      hint: true as const,
-    }));
     const base =
       mode === "move"
         ? CHANGES_MOVE
         : focus === "left"
           ? CHANGES_LEFT
           : CHANGES_RIGHT;
-    onHints?.(hints([...base, ...commandShortcuts]));
+    const merged = base.map((s) => ({ ...s, kbds: [...s.kbds] }));
+    const byId = new Map(merged.map((s) => [s.id, s]));
+    for (const c of commands) {
+      const existing = byId.get(c.id);
+      if (existing) {
+        existing.kbds.push(...c.keys);
+      } else {
+        const entry: Shortcut = {
+          id: c.id,
+          kbds: [...c.keys],
+          desc: c.id,
+          hint: true,
+        };
+        byId.set(c.id, entry);
+        merged.push(entry);
+      }
+    }
+    onHints?.(hints(merged));
   }, [focus, mode, commands]);
 
   const pushSelectedBookmarks = async () => {
