@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Icon, KbdGroup, T, Textarea, useAdwaita, groupHints, ShortcutHint } from "adwaita-gpuix";
+import { Icon, T, Textarea, useAdwaita, groupHints, ShortcutHints } from "adwaita-gpuix";
 import { failMessage } from "../errors";
 import { describeChange } from "../repo";
 import { DESCRIBE_OVERLAY, hints, matchShortcut } from "../shortcuts";
@@ -127,11 +127,7 @@ export function DescribePopover({
             }
           }}
         />
-        <KbdGroup>
-          {groupHints(hints(DESCRIBE_OVERLAY)).map((g) => (
-            <ShortcutHint key={g.desc} group={g} />
-          ))}
-        </KbdGroup>
+        <ShortcutHints groups={groupHints(hints(DESCRIBE_OVERLAY))} />
       </div>
     </anchored>
   );

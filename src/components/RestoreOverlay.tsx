@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Checkbox, Icon, KbdGroup, T, useAdwaita, groupHints, ShortcutHint, DialogFrame, ListRow, useToast } from "adwaita-gpuix";
-import { useKeyEvents } from "../hooks/use-key-events";
+import { Checkbox, Icon, T, useAdwaita, groupHints, ShortcutHints, DialogFrame, ListRow, useToast } from "adwaita-gpuix";
+import { useKeyEvents } from "../hooks/useKeyEvents";
 import { failMessage } from "../errors";
 import {
   applyRestoreHunks,
@@ -216,11 +216,7 @@ export function RestoreOverlay({
           })}
         </div>
       )}
-      <KbdGroup>
-        {shownHints.map((g) => (
-          <ShortcutHint key={g.desc} group={g} />
-        ))}
-      </KbdGroup>
+      <ShortcutHints groups={shownHints} />
     </DialogFrame>
   );
 }

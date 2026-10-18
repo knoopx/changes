@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Icon, KbdGroup, T, useAdwaita, type IconName, groupHints, ShortcutHint, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
+import { Icon, T, useAdwaita, type IconName, groupHints, ShortcutHints, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
 import { completeRevset, revsetSignatureHelp, type RevsetCandidate } from "../revsets";
 import { REVOLET_OVERLAY, hints, matchShortcut } from "../shortcuts";
 
@@ -179,11 +179,7 @@ export function RevsetOverlay({
           })
         )}
       </div>
-      <KbdGroup>
-        {groupHints(hints(REVOLET_OVERLAY)).map((g) => (
-          <ShortcutHint key={g.desc} group={g} />
-        ))}
-      </KbdGroup>
+      <ShortcutHints groups={groupHints(hints(REVOLET_OVERLAY))} />
     </DialogFrame>
   );
 }
