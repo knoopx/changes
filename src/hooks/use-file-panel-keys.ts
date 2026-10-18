@@ -17,6 +17,7 @@ interface FilePanelKeyCtx {
   onSplit?: () => void;
   onDiscard?: () => void;
   onHunks?: () => void;
+  onRestoreHunks?: () => void;
 }
 
 function fileMoveSel(id: string, ctx: FilePanelKeyCtx): boolean {
@@ -106,6 +107,12 @@ function fileCallbackAction(id: string, ctx: FilePanelKeyCtx): boolean {
         return true;
       }
       return false;
+    case "restore-hunks":
+      if (ctx.onRestoreHunks) {
+        ctx.onRestoreHunks();
+        return true;
+      }
+      return false;
     default:
       return false;
   }
@@ -115,7 +122,13 @@ const FILE_MOVE_IDS = new Set(["up", "down", "page-up", "page-down"]);
 const FILE_JUMP_IDS = new Set(["home", "end"]);
 const FILE_SCROLL_IDS = new Set(["scroll-up", "scroll-down"]);
 const FILE_ACTION_IDS = new Set(["focus-left", "open", "back"]);
-const FILE_CALLBACK_IDS = new Set(["escape", "split", "discard", "hunks"]);
+const FILE_CALLBACK_IDS = new Set([
+  "escape",
+  "split",
+  "discard",
+  "hunks",
+  "restore-hunks",
+]);
 
 export function useFilePanelKeys(opts: {
   set: Shortcut[];
@@ -138,6 +151,8 @@ export function useFilePanelKeys(opts: {
   onDiscard?: () => void;
 
   onHunks?: () => void;
+
+  onRestoreHunks?: () => void;
 }): (key: string, mods: KeyMods) => boolean {
   const {
     set,
@@ -155,6 +170,7 @@ export function useFilePanelKeys(opts: {
     onSplit,
     onDiscard,
     onHunks,
+    onRestoreHunks,
   } = opts;
   const toast = useToast();
 
@@ -185,6 +201,7 @@ export function useFilePanelKeys(opts: {
     onSplit,
     onDiscard,
     onHunks,
+    onRestoreHunks,
   };
 
   return (key: string, mods: KeyMods): boolean => {
