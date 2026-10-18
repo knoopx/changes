@@ -19,12 +19,12 @@ import {
   matchShortcut,
   type Shortcut,
 } from "./shortcuts";
-import { ChangesView } from "./screens/changes";
-import { BookmarksView } from "./screens/bookmarks";
-import { OpLogView } from "./screens/oplog";
-import { EvologView } from "./screens/evolog";
-import { HunksView } from "./screens/hunks";
-import { WorkspacesView } from "./screens/workspaces";
+import { ChangesView } from "./screens/ChangesView";
+import { BookmarksView } from "./screens/BookmarksView";
+import { OpLogView } from "./screens/OpLogView";
+import { EvologView } from "./screens/EvologView";
+import { HunksView } from "./screens/HunksView";
+import { WorkspacesView } from "./screens/WorkspacesView";
 
 const VIEW_ITEMS: ViewSwitcherItem[] = [
   { id: "changes", label: "Changes", icon: "list" },
@@ -112,6 +112,8 @@ export function App() {
             value={view.kind}
             onChange={switchView}
             showLabels={false}
+            separators={false}
+            style={{ borderWidth: 0, padding: 0, flexShrink: 0 }}
           />
         }
         left={
@@ -136,8 +138,7 @@ export function App() {
           flexDirection: "column",
           flexGrow: 1,
           minHeight: 0,
-          padding: 8,
-          gap: 8,
+          minWidth: 0,
         }}
       >
         {view.kind === "changes" && (
