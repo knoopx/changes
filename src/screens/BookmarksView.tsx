@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Spinner,
   T,
@@ -11,22 +11,24 @@ import {
   BookmarkPill,
   ScreenLayout,
   DiffPanel,
+  DiffSummary,
   FileListTitle,
   MonoBadge,
   PanelTrailing,
+  summarizePatch,
 } from "adwaita-gpuix";
 import { type ViewProps } from "../types";
 import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
-import { FileListPanel } from "../components/file-list-panel";
+import { FileListPanel } from "../components/FileListPanel";
 import { wrapIndex } from "../indexing";
-import { useDiffListRefs } from "../hooks/use-diff-list-refs";
-import { useFileDiffPanelState } from "../hooks/use-file-diff-state";
-import { useFileNavigation } from "../hooks/use-file-navigation";
-import { useFilePanelKeys } from "../hooks/use-file-panel-keys";
-import { useKeyEvents } from "../hooks/use-key-events";
-import { useRepoMutation } from "../hooks/use-repo-mutation";
-import { useRepoRefresh } from "../hooks/use-repo-watcher";
+import { useDiffListRefs } from "../hooks/useDiffListRefs";
+import { useFileDiffPanelState } from "../hooks/useFileDiffState";
+import { useFileNavigation } from "../hooks/useFileNavigation";
+import { useFilePanelKeys } from "../hooks/useFilePanelKeys";
+import { useKeyEvents } from "../hooks/useKeyEvents";
+import { useRepoMutation } from "../hooks/useRepoMutation";
+import { useRepoRefresh } from "../hooks/useRepoWatcher";
 import {
   forgetBookmark,
   gitFetch,
@@ -275,6 +277,7 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
   const diffTitle = group ? (file ? file.path : "all") : "Diff";
 
   const keyBadge = <MonoBadge text={group ? group.key : null} />;
+  const diffStats = useMemo(() => summarizePatch(patch), [patch]);
 
   return (
     <ScreenLayout
@@ -286,10 +289,13 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
         <ListPanel listRef={listRef}>
           {groups.map((g, i) => {
             const isSel = i === sel;
+            
+            const isActive = isSel && focus === "left";
             return (
               <ListRow
                 key={g.key + i}
                 selected={isSel}
+                focused={focus === "left"}
                 height={24}
                 onClick={() => {
                   setSel(i);
@@ -311,7 +317,7 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
                     g.description !== "(no description)" && (
                       <T
                         size="caption"
-                        color={isSel ? colors.accent : colors.dim_fg}
+                        color={isActive ? colors.accent : colors.dim_fg}
                         weight={isSel ? 600 : 400}
                         style={{
                           flexGrow: 1,
@@ -328,7 +334,7 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
                   {g.author !== "" && (
                     <T
                       size="caption"
-                      color={isSel ? colors.accent : colors.dim_fg}
+                      color={isActive ? colors.accent : colors.dim_fg}
                       weight={isSel ? 600 : 400}
                       style={{
                         flexShrink: 100,
@@ -354,6 +360,7 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
         <FileListPanel
           files={files}
           selected={fileSel}
+          focused={focus === "right"}
           estimatedItemHeight={22}
           onSelect={(i) => {
             setFileSel(i);
@@ -363,7 +370,12 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
         />
       }
       bottomTitle={diffTitle}
-      bottomTrailing={keyBadge}
+      bottomTrailing={
+        <DiffSummary
+          added={diffStats.added}
+          removed={diffStats.removed}
+        />
+      }
       bottom={<DiffPanel patch={patch} diffRef={diffRef} />}
       trailing={loading ? <Spinner size={16} /> : null}
     />

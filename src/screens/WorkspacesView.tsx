@@ -11,14 +11,16 @@ import {
   ScreenLayout,
   ListPanel,
   DiffPanel,
+  DiffSummary,
   MonoBadge,
   PanelTrailing,
+  summarizePatch,
   useToast,
   type ToastFn,
 } from "adwaita-gpuix";
 import { type ViewProps } from "../types";
 import { keyOf } from "../keybus";
-import { FileListPanel } from "../components/file-list-panel";
+import { FileListPanel } from "../components/FileListPanel";
 import { failMessage } from "../errors";
 import {
   attachWorkspace,
@@ -38,13 +40,13 @@ import {
 import { isTabularPath, parseTabularSides } from "../tabular";
 import { MONO } from "../theme";
 import { clampIndex } from "../indexing";
-import { useDiffListRefs } from "../hooks/use-diff-list-refs";
+import { useDiffListRefs } from "../hooks/useDiffListRefs";
 import {
   useFileDiffPanelState,
   type FilePanelFocus,
-} from "../hooks/use-file-diff-state";
-import { useKeyEvents } from "../hooks/use-key-events";
-import { useRepoRefresh } from "../hooks/use-repo-watcher";
+} from "../hooks/useFileDiffState";
+import { useKeyEvents } from "../hooks/useKeyEvents";
+import { useRepoRefresh } from "../hooks/useRepoWatcher";
 import { WS_LEFT, WS_RIGHT, hints, matchShortcut } from "../shortcuts";
 
 interface LeftKeyCtx {
@@ -478,6 +480,7 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
   const diffTitle = w ? (file ? file.path : "all") : "Diff";
 
   const nameBadge = <MonoBadge text={w ? w.name : null} />;
+  const diffStats = useMemo(() => summarizePatch(patch), [patch]);
 
   return (
     <ScreenLayout
@@ -504,12 +507,15 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
               }
             }
             const isSel = i === sel;
+            
+            const isActive = isSel && focus === "left";
             const hasDesc =
               ws.description !== "" && ws.description !== "(no description)";
             return (
               <ListRow
                 key={ws.name}
                 selected={isSel}
+                focused={focus === "left"}
                 height={24}
                 onClick={() => {
                   setSel(i);
@@ -541,7 +547,7 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
                   </RadioGroup>
                   {isIde && <RowIcon name={icon} color={iconColor} />}
                   <T
-                    color={isSel ? colors.accent : colors.fg}
+                    color={isActive ? colors.accent : colors.fg}
                     weight={isSel ? 600 : 400}
                     style={{ whiteSpace: "nowrap" }}
                   >
@@ -581,6 +587,7 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
         <FileListPanel
           files={files}
           selected={fileSel}
+          focused={focus === "right"}
           estimatedItemHeight={28}
           onSelect={(i) => {
             setFileSel(i);
@@ -590,7 +597,9 @@ export function WorkspacesView({ navigate, onHints }: ViewProps) {
         />
       }
       bottomTitle={diffTitle}
-      bottomTrailing={nameBadge}
+      bottomTrailing={
+        <DiffSummary added={diffStats.added} removed={diffStats.removed} />
+      }
       bottom={<DiffPanel patch={patch} tabular={tabular} diffRef={diffRef} />}
       trailing={loading ? <Spinner size={16} /> : null}
     />

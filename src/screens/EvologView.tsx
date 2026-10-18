@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Icon,
   RadioGroup,
@@ -10,7 +10,9 @@ import {
   ListPanel,
   ScreenLayout,
   DiffPanel,
+  DiffSummary,
   MonoBadge,
+  summarizePatch,
   useToast,
 } from "adwaita-gpuix";
 import { type ViewProps } from "../types";
@@ -18,9 +20,9 @@ import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
 import { type EvologEntry, getEvologDiff, loadEvolog } from "../repo";
 import { clampIndex } from "../indexing";
-import { useDiffListRefs } from "../hooks/use-diff-list-refs";
-import { useKeyEvents } from "../hooks/use-key-events";
-import { useRepoRefresh } from "../hooks/use-repo-watcher";
+import { useDiffListRefs } from "../hooks/useDiffListRefs";
+import { useKeyEvents } from "../hooks/useKeyEvents";
+import { useRepoRefresh } from "../hooks/useRepoWatcher";
 import { MONO } from "../theme";
 import { EVOLONG, hints, matchShortcut } from "../shortcuts";
 
@@ -128,6 +130,7 @@ export function EvologView({
   const commitIdBadge = (
     <MonoBadge text={selected ? selected.commit_id.slice(0, 8) : null} />
   );
+  const diffStats = useMemo(() => summarizePatch(patch), [patch]);
 
   return (
     <ScreenLayout
@@ -230,7 +233,15 @@ export function EvologView({
         </ListPanel>
       }
       bottomTitle="Diff"
-      bottomTrailing={commitIdBadge}
+      bottomTrailing={
+        <>
+          <DiffSummary
+            added={diffStats.added}
+            removed={diffStats.removed}
+          />
+          {commitIdBadge}
+        </>
+      }
       bottom={<DiffPanel patch={patch} />}
       trailing={loading ? <Spinner size={16} /> : null}
     />

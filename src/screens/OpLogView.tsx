@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   RadioGroup,
   RadioGroupItem,
@@ -9,7 +9,9 @@ import {
   ListPanel,
   ScreenLayout,
   DiffPanel,
+  DiffSummary,
   MonoBadge,
+  summarizePatch,
   useToast,
 } from "adwaita-gpuix";
 import { type OpLogEntry, type ViewProps } from "../types";
@@ -17,10 +19,10 @@ import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
 import { getOpDiff, loadOpLog, redoOp, restoreOp, splitOpDiff, undoOp } from "../repo";
 import { clampIndex } from "../indexing";
-import { useDiffListRefs } from "../hooks/use-diff-list-refs";
-import { useKeyEvents } from "../hooks/use-key-events";
-import { useRepoMutation } from "../hooks/use-repo-mutation";
-import { useRepoRefresh } from "../hooks/use-repo-watcher";
+import { useDiffListRefs } from "../hooks/useDiffListRefs";
+import { useKeyEvents } from "../hooks/useKeyEvents";
+import { useRepoMutation } from "../hooks/useRepoMutation";
+import { useRepoRefresh } from "../hooks/useRepoWatcher";
 import { MONO } from "../theme";
 import { matchShortcut, OPLOG } from "../shortcuts";
 
@@ -149,6 +151,7 @@ export function OpLogView({ navigate }: ViewProps) {
   const opIdBadge = (
     <MonoBadge text={selected ? selected.op_id.slice(0, 8) : null} />
   );
+  const diffStats = useMemo(() => summarizePatch(patch), [patch]);
 
   return (
     <ScreenLayout
@@ -219,7 +222,15 @@ export function OpLogView({ navigate }: ViewProps) {
         </ListPanel>
       }
       bottomTitle={diffTitle}
-      bottomTrailing={opIdBadge}
+      bottomTrailing={
+        <>
+          <DiffSummary
+            added={diffStats.added}
+            removed={diffStats.removed}
+          />
+          {opIdBadge}
+        </>
+      }
       bottom={<DiffPanel patch={patch} />}
       trailing={loading ? <Spinner size={16} /> : null}
     />

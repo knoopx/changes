@@ -12,20 +12,22 @@ import {
   BookmarkPill,
   ScreenLayout,
   DiffPanel,
+  DiffSummary,
   FileListTitle,
   MonoBadge,
   PanelTrailing,
+  summarizePatch,
 } from "adwaita-gpuix";
 import { type Bookmark, type Change, type View, type ViewProps } from "../types";
 import { loadConfig, onConfigChanged } from "../config";
 import { findCommandBinding, runCommand, type Command } from "../commands";
 import { keyOf } from "../keybus";
 import { failMessage } from "../errors";
-import { BookmarkOverlay } from "../components/bookmark-overlay";
-import { RevsetOverlay } from "../components/revset-overlay";
-import { RestoreOverlay } from "../components/restore-overlay";
-import { ImageDiffPanel } from "../components/image-diff-panel";
-import { FileListPanel } from "../components/file-list-panel";
+import { BookmarkOverlay } from "../components/BookmarkOverlay";
+import { RevsetOverlay } from "../components/RevsetOverlay";
+import { RestoreOverlay } from "../components/RestoreOverlay";
+import { ImageDiffPanel } from "../components/ImageDiffPanel";
+import { FileListPanel } from "../components/FileListPanel";
 import {
   abandonChange,
   absorbChange,
@@ -46,7 +48,7 @@ import {
   squashChange,
 } from "../repo";
 import { copyToClipboard } from "../clipboard";
-import { DescribePopover } from "../components/describe-overlay";
+import { DescribePopover } from "../components/DescribePopover";
 import { isTabularPath, parseTabularSides } from "../tabular";
 import { isImagePath } from "../images";
 import {
@@ -58,16 +60,16 @@ import {
   type GraphNode,
 } from "../graph";
 import { wrapIndex } from "../indexing";
-import { useDiffListRefs } from "../hooks/use-diff-list-refs";
+import { useDiffListRefs } from "../hooks/useDiffListRefs";
 import {
   useFileDiffPanelState,
   type FilePanelFocus,
-} from "../hooks/use-file-diff-state";
-import { useFileNavigation } from "../hooks/use-file-navigation";
-import { useFilePanelKeys } from "../hooks/use-file-panel-keys";
-import { useKeyEvents } from "../hooks/use-key-events";
-import { useRepoMutation } from "../hooks/use-repo-mutation";
-import { useRepoRefresh } from "../hooks/use-repo-watcher";
+} from "../hooks/useFileDiffState";
+import { useFileNavigation } from "../hooks/useFileNavigation";
+import { useFilePanelKeys } from "../hooks/useFilePanelKeys";
+import { useKeyEvents } from "../hooks/useKeyEvents";
+import { useRepoMutation } from "../hooks/useRepoMutation";
+import { useRepoRefresh } from "../hooks/useRepoWatcher";
 import {
   CHANGES_LEFT,
   CHANGES_MOVE,
@@ -297,6 +299,8 @@ function ChangeRow({
   describeOpen,
   describeTargets,
   side,
+  
+  focused,
   colors,
   onRowClick,
   onToggle,
@@ -315,6 +319,8 @@ function ChangeRow({
   describeOpen: boolean;
   describeTargets: string[];
   side: "top" | "bottom";
+  
+  focused: boolean;
   colors: ReturnType<typeof useAdwaita>["colors"];
   onRowClick: () => void;
   onToggle: () => void;
@@ -323,6 +329,7 @@ function ChangeRow({
   return (
     <ListRow
       selected={isSelected}
+      focused={focused}
       height={24}
       style={isSelected ? { position: "relative" } : undefined}
       onClick={onRowClick}
@@ -965,6 +972,7 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
     [file, patch],
   );
   const filterLabel = effFilters[filterIndex]?.[0] ?? "";
+  const diffStats = useMemo(() => summarizePatch(patch), [patch]);
 
   const selChangeId =
     (mode === "move" ? moveChanges : changes)[sel]?.change_id ?? null;
@@ -1024,6 +1032,7 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
                   describeOpen={describeOpen}
                   describeTargets={describeTargets}
                   side={sel >= 3 ? "top" : "bottom"}
+                  focused={focus === "left"}
                   colors={colors}
                   onRowClick={() => {
                     setSel(ci);
@@ -1051,6 +1060,7 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
           <FileListPanel
             files={files}
             selected={fileSel}
+            focused={focus === "right"}
             estimatedItemHeight={28}
             onSelect={(i) => {
               setFileSel(i);
@@ -1063,7 +1073,12 @@ export function ChangesView({ navigate, onHints }: ViewProps) {
         }
         bottomTitle={diffTitle}
         midTrailing={<PanelTrailing loading={loading} badge={idBadge} />}
-        bottomTrailing={idBadge}
+        bottomTrailing={
+          <DiffSummary
+            added={diffStats.added}
+            removed={diffStats.removed}
+          />
+        }
         bottom={
           change && file && isImagePath(file.path) ? (
             <ImageDiffPanel changeId={change.change_id} path={file.path} />
