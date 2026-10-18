@@ -6,6 +6,7 @@ import { failMessage } from "../errors";
 import { useToast } from "../components/toast";
 import { ListPanel } from "../components/virtual-list-panel";
 import { ListRow, PillGroup, RowShell } from "../components/panel";
+import { BookmarkPill } from "../components/bookmark-pill";
 import { ScreenLayout } from "../components/screen-layout";
 import { DiffPanel } from "../components/diff-panel";
 import { FileListPanel } from "../components/file-list-panel";
@@ -290,7 +291,13 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
               >
                 <RowShell>
                   {}
-                  <PillGroup names={g.displayNames} dimmed={!isSel} />
+                  <PillGroup
+                    names={g.displayNames}
+                    dimmed={!isSel}
+                    renderPill={(name, dimmed) => (
+                      <BookmarkPill name={name} dimmed={dimmed} />
+                    )}
+                  />
                   {}
                   {g.description !== "" &&
                     g.description !== "(no description)" && (
