@@ -15,7 +15,7 @@ import { DiffPanel } from "../components/diff-panel";
 import { MonoBadge } from "../components/panel-headers";
 import { failMessage } from "../errors";
 import { useToast } from "../components/toast";
-import { getOpDiff, loadOpLog, restoreOp, splitOpDiff, undoOp } from "../repo";
+import { getOpDiff, loadOpLog, redoOp, restoreOp, splitOpDiff, undoOp } from "../repo";
 import { clampIndex } from "../indexing";
 import { useDiffListRefs } from "../hooks/use-diff-list-refs";
 import { useKeyEvents } from "../hooks/use-key-events";
@@ -131,6 +131,9 @@ export function OpLogView({ navigate }: ViewProps) {
         return;
       case "undo":
         void doUndo();
+        return;
+      case "redo":
+        void runMutation(() => redoOp());
         return;
       case "back":
         navigate({ kind: "changes" });
