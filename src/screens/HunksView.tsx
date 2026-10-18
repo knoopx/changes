@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { Checkbox, Spinner, StatusPage, T, useAdwaita, ListRow, Panel, ListPanel, useToast } from "adwaita-gpuix";
+import {
+  Checkbox,
+  Separator,
+  Spinner,
+  StatusPage,
+  T,
+  useAdwaita,
+  ListRow,
+  Panel,
+  ListPanel,
+  useToast,
+} from "adwaita-gpuix";
 import { type FlatHunk, type ViewProps } from "../types";
 import { keyOf } from "../keybus";
-import { useKeyEvents } from "../hooks/use-key-events";
-import { useDiffListRefs } from "../hooks/use-diff-list-refs";
+import { useKeyEvents } from "../hooks/useKeyEvents";
+import { useDiffListRefs } from "../hooks/useDiffListRefs";
 import { wrapIndex } from "../indexing";
 import { failMessage } from "../errors";
 import { type PublicInstance } from "@gpuix/react";
@@ -219,6 +230,7 @@ function HunksUnavailable() {
       <Panel
         title="Hunks"
         focused
+        bordered={false}
         style={{ flexGrow: 1, flexBasis: 0, minHeight: 0 }}
       >
         <StatusPage
@@ -236,6 +248,7 @@ function HunkRow({
   h,
   isSelected,
   isChecked,
+  focused = true,
   colors,
   onRowClick,
   onToggle,
@@ -243,12 +256,19 @@ function HunkRow({
   h: FlatHunk;
   isSelected: boolean;
   isChecked: boolean;
+  
+  focused?: boolean;
   colors: Colors;
   onRowClick: () => void;
   onToggle: () => void;
 }) {
   return (
-    <ListRow selected={isSelected} height={24} onClick={onRowClick}>
+    <ListRow
+      selected={isSelected}
+      focused={focused}
+      height={24}
+      onClick={onRowClick}
+    >
       <div
         style={{
           display: "flex",
@@ -305,6 +325,7 @@ function HunkListBody({
   hunks,
   sel,
   selected,
+  focused = true,
   colors,
   listRef,
   onRowClick,
@@ -313,6 +334,8 @@ function HunkListBody({
   hunks: FlatHunk[];
   sel: number;
   selected: Set<string>;
+  
+  focused?: boolean;
   colors: Colors;
   listRef: { current: PublicInstance | null };
   onRowClick: (index: number) => void;
@@ -328,6 +351,7 @@ function HunkListBody({
             h={h}
             isSelected={i === sel}
             isChecked={selected.has(k)}
+            focused={focused}
             colors={colors}
             onRowClick={() => onRowClick(i)}
             onToggle={onToggle}
@@ -353,9 +377,9 @@ function PreviewPane({
     <Panel
       title={title}
       focused={focused}
+      bordered={false}
       style={{ flexGrow: 60, flexBasis: 0, minHeight: 0 }}
     >
-      {}
       <div
         ref={previewRef}
         style={{
@@ -571,7 +595,6 @@ export function HunksView({
       style={{
         display: "flex",
         flexDirection: "row",
-        gap: 8,
         flexGrow: 1,
         minHeight: 0,
         minWidth: 0,
@@ -581,6 +604,7 @@ export function HunksView({
         title={`Hunks (${hunks.length})${loading ? " …" : ""}${error ? " · error" : ""}`}
         focused={focus === "left"}
         trailing={loading ? <Spinner size={16} /> : null}
+        bordered={false}
         style={{ flexGrow: 40, flexBasis: 0, minWidth: 0 }}
       >
         {error ? (
@@ -602,6 +626,7 @@ export function HunksView({
             hunks={hunks}
             sel={sel}
             selected={selected}
+            focused={focus === "left"}
             colors={colors}
             listRef={listRef}
             onRowClick={(i) => {
@@ -614,6 +639,7 @@ export function HunksView({
         )}
       </Panel>
 
+      <Separator orientation="vertical" style={{ alignSelf: "stretch" }} />
       <PreviewPane
         title={hunk.file_path}
         focused={focus === "right"}
