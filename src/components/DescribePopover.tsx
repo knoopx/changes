@@ -96,7 +96,6 @@ export function DescribePopover({
         {arrow}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Icon name="fileText" size={18} color={colors.accent} />
-          {}
           <T size="title4" weight={700} color={colors.fg}>
             {`Describe (${targetIds.length} change${targetIds.length === 1 ? "" : "s"})`}
           </T>

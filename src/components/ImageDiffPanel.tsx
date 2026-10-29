@@ -391,9 +391,7 @@ export function ImageDiffPanel({
     hasOld && hasNext
       ? renderStage(
           <>
-            {}
             {overlayImg(sides.next)}
-            {}
             {overlayImg(sides.old, { opacity: opacity / 100 })}
           </>,
         )
@@ -403,19 +401,15 @@ export function ImageDiffPanel({
     hasOld && hasNext
       ? renderStage(
           <>
-            {}
             {overlayImg(sides.old)}
-            {}
             {(axis === "v" ? w > 0 : h > 0) && (
               <div style={clipStyle}>
                 <img src={sides.next} objectFit="contain" style={innerStyle} />
               </div>
             )}
-            {}
             <div onMouseDown={onSplitDragStart} style={dividerStyle}>
               <div style={accentStyle} />
             </div>
-            {}
             {dragging && (
               <div
                 onMouseMove={onSplitDragMove}
@@ -450,7 +444,6 @@ export function ImageDiffPanel({
         backgroundColor: colors.view_bg,
       }}
     >
-      {}
       <div
         style={{
           display: "flex",

@@ -335,7 +335,6 @@ function ChangeRow({
       onClick={onRowClick}
     >
       <RowShell>
-        {}
         <GraphGutter
           node={node}
           prev={prev}
@@ -344,7 +343,6 @@ function ChangeRow({
           dotStroke={isCurrent ? colors.accent : undefined}
           selectedStroke={colors.fg}
         />
-        {}
         {bm.length > 0 && (
           <PillGroup
             names={bm}
@@ -354,7 +352,6 @@ function ChangeRow({
             )}
           />
         )}
-        {}
         <T
           size="caption"
           style={{
@@ -369,15 +366,12 @@ function ChangeRow({
         >
           {desc}
         </T>
-        {}
         {c.has_conflicts && (
           <Icon name="warning" size={12} color={colors.destructive} />
         )}
-        {}
         <div style={{ width: 18, flexShrink: 0 }}>
           <Checkbox checked={isChecked} onCheckedChange={onToggle} />
         </div>
-        {}
         {isSelected && describeOpen && (
           <DescribePopover
             targetIds={describeTargets}

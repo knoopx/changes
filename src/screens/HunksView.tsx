@@ -278,7 +278,6 @@ function HunkRow({
           flexGrow: 1,
         }}
       >
-        {}
         <div style={{ width: 18, flexShrink: 0 }}>
           <Checkbox checked={isChecked} onCheckedChange={onToggle} />
         </div>
@@ -308,7 +307,6 @@ function HunkRow({
         >
           {h.hunk.id.slice(0, 12)}
         </T>
-        {}
         <T
           size="caption"
           color={colors.dim_fg}

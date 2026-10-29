@@ -304,7 +304,6 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
                 }}
               >
                 <RowShell>
-                  {}
                   <PillGroup
                     names={g.displayNames}
                     dimmed={!isSel}
@@ -312,7 +311,6 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
                       <BookmarkPill name={name} dimmed={dimmed} />
                     )}
                   />
-                  {}
                   {g.description !== "" &&
                     g.description !== "(no description)" && (
                       <T
@@ -330,7 +328,6 @@ export function BookmarksView({ navigate, onHints }: ViewProps) {
                         {g.description}
                       </T>
                     )}
-                  {}
                   {g.author !== "" && (
                     <T
                       size="caption"
