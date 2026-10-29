@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Checkbox, Icon, T, useAdwaita, groupHints, ShortcutHints, DialogFrame, ListRow, useToast } from "adwaita-gpuix";
+import { Checkbox, Icon, T, useAdwaita, groupHints, DialogHintBar, candidateListHeight, DialogFrame, ListRow, useToast } from "adwaita-gpuix";
 import { useKeyEvents } from "../hooks/useKeyEvents";
 import { failMessage } from "../errors";
 import {
@@ -9,6 +9,9 @@ import {
 } from "../repo";
 import { RESTORE_OVERLAY, hints, matchShortcut } from "../shortcuts";
 import { MONO } from "../theme";
+
+const ROW_H = 24;
+const MAX_VISIBLE = 10;
 
 export function RestoreOverlay({
   changeId,
@@ -107,7 +110,7 @@ export function RestoreOverlay({
   );
 
   return (
-    <DialogFrame width={640} height={420}>
+    <DialogFrame width={640}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
         <Icon name="fileText" size={18} color={colors.accent} />
         <T
@@ -143,10 +146,12 @@ export function RestoreOverlay({
           style={{
             display: "flex",
             flexDirection: "column",
-            flexGrow: 1,
-            minHeight: 0,
-            overflowY: "scroll",
             gap: 2,
+            overflowY: "scroll",
+            height: candidateListHeight(
+              Math.min(hunks.length, MAX_VISIBLE),
+              ROW_H,
+            ),
           }}
         >
           {hunks.map((h) => {
@@ -216,7 +221,7 @@ export function RestoreOverlay({
           })}
         </div>
       )}
-      <ShortcutHints groups={shownHints} />
+      <DialogHintBar groups={shownHints} />
     </DialogFrame>
   );
 }

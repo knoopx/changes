@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
-import { Icon, T, useAdwaita, groupHints, ShortcutHints, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
+import { Icon, T, useAdwaita, groupHints, DialogHintBar, candidateListHeight, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
 import { failMessage } from "../errors";
 import { forgetBookmark, listBookmarks, setBookmarkToChange } from "../repo";
 import { BOOKMARK_OVERLAY, hints, matchShortcut } from "../shortcuts";
+
+const ROW_H = 24;
+const MAX_VISIBLE = 5;
 
 export function BookmarkOverlay({
   targetChangeId,
@@ -81,7 +84,7 @@ export function BookmarkOverlay({
   } = windowCandidates(
     candidates,
     activeIndex,
-    5,
+    MAX_VISIBLE,
   );
 
   const byId = (id: string) =>
@@ -95,7 +98,7 @@ export function BookmarkOverlay({
   );
 
   return (
-    <DialogFrame width={520} height={260}>
+    <DialogFrame width={520}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Icon name="bookmark" size={18} color={colors.accent} />
         <T size="title2" weight={700} color={colors.fg}>
@@ -139,8 +142,7 @@ export function BookmarkOverlay({
           display: "flex",
           flexDirection: "column",
           gap: 2,
-          flexGrow: 1,
-          minHeight: 0,
+          height: candidateListHeight(end - start, ROW_H),
         }}
       >
         {loading ? (
@@ -188,7 +190,7 @@ export function BookmarkOverlay({
           })
         )}
       </div>
-      <ShortcutHints groups={shownHints} />
+      <DialogHintBar groups={shownHints} />
     </DialogFrame>
   );
 }

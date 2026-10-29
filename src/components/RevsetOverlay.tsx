@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Icon, T, useAdwaita, type IconName, groupHints, ShortcutHints, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
+import { useRef, useState } from "react";
+import { Icon, T, useAdwaita, type IconName, groupHints, DialogHintBar, candidateListHeight, candidateRowStyle, DialogFrame, OverlayInput, windowCandidates } from "adwaita-gpuix";
 import { completeRevset, revsetSignatureHelp, type RevsetCandidate } from "../revsets";
 import { REVOLET_OVERLAY, hints, matchShortcut } from "../shortcuts";
 
@@ -11,6 +11,9 @@ const KIND_ICON: Record<RevsetCandidate["kind"], IconName> = {
   change: "gitBranch",
   file: "fileText", 
 };
+
+const ROW_H = 24;
+const MAX_VISIBLE = 6;
 
 export function RevsetOverlay({
   initial,
@@ -42,7 +45,14 @@ export function RevsetOverlay({
   });
   const sig = revsetSignatureHelp(value);
 
+  const { activeIdx, start, end } = windowCandidates(
+    cands,
+    activeIndex,
+    MAX_VISIBLE,
+  );
+
   const insertAtCursor = (insert: string) => {
+    if (value.endsWith(insert)) return;
     const m = /([A-Za-z0-9_@.:/-]+)$/.exec(value);
     const trailing = m ? m[1].length : 0;
     setValue(value.slice(0, value.length - trailing) + insert);
@@ -57,21 +67,37 @@ export function RevsetOverlay({
     insertAtCursor(cand.insert);
   };
 
-  const applyEnter = () => {
-    const v = value.trim();
-    if (v !== "") {
-      onApply(v, v);
-      return;
-    }
-    const idx = filters.findIndex((f) => f[1] === initial);
-    if (idx >= 0) onApply(initial, filters[idx][0]);
-    else onCancel();
+  const settledRef = useRef(false);
+  const finish = (fn: () => void) => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    fn();
   };
 
-  const { activeIdx, start, end } = windowCandidates(cands, activeIndex, 6);
+  const applyEnter = () => {
+    const cand = cands[activeIdx];
+    if (cand && cand.kind !== "filter") {
+      insertAtCursor(cand.insert);
+      return;
+    }
+    finish(() => {
+      if (cand) {
+        onApply(cand.insert, cand.label);
+        return;
+      }
+      const v = value.trim();
+      if (v !== "") {
+        onApply(v, v);
+        return;
+      }
+      const idx = filters.findIndex((f) => f[1] === initial);
+      if (idx >= 0) onApply(initial, filters[idx][0]);
+      else onCancel();
+    });
+  };
 
   return (
-    <DialogFrame width={560} height={280}>
+    <DialogFrame width={560}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Icon name="list" size={18} color={colors.accent} />
         <T size="title2" weight={700} color={colors.fg}>
@@ -85,7 +111,7 @@ export function RevsetOverlay({
           setValue(v);
           setActiveIndex(0);
         }}
-        onSubmit={() => {}}
+        onSubmit={applyEnter}
         onKeyDown={(e) => {
           const k = (e.key ?? "").toLowerCase();
           const m = matchShortcut(REVOLET_OVERLAY, k);
@@ -103,7 +129,7 @@ export function RevsetOverlay({
               applyEnter();
               break;
             case "cancel":
-              onCancel();
+              finish(onCancel);
               break;
             default:
               break;
@@ -120,8 +146,7 @@ export function RevsetOverlay({
           display: "flex",
           flexDirection: "column",
           gap: 2,
-          flexGrow: 1,
-          minHeight: 0,
+          height: candidateListHeight(end - start, ROW_H),
         }}
       >
         {cands.length === 0 ? (
@@ -179,7 +204,7 @@ export function RevsetOverlay({
           })
         )}
       </div>
-      <ShortcutHints groups={groupHints(hints(REVOLET_OVERLAY))} />
+      <DialogHintBar groups={groupHints(hints(REVOLET_OVERLAY))} />
     </DialogFrame>
   );
 }

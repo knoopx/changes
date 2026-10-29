@@ -14,7 +14,3 @@ export function fileStatusColor(t: AdwaitaTheme, status: string): string {
       return t.colors.warning;
   }
 }
-
-export function scrimBg(t: AdwaitaTheme): string {
-  return "rgba(0,0,0,0.45)";
-}
