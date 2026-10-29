@@ -21,8 +21,8 @@
       adwaitaSrc = pkgs.fetchFromGitHub {
         owner = "knoopx";
         repo = "adwaita-gpuix";
-        rev = "9761d8b9eb1549b2d65ab77d3b75ff6c54d48ee4";
-        hash = "sha256:0b08br18sf17vbhsmyr5vkzlb6qs54xfmqs4jm68xk24jbsjfvmy";
+        rev = "f49921bb73b23a27a02ad95b3f50f41929612a5f";
+        hash = "sha256:1lj0invmw18hkwv5jzygdrx9wp02cwgs9ia12cjn37laxidiaqja";
       };
 
       # Every npm (registry) dependency — direct and transitive (react-reconciler
