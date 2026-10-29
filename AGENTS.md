@@ -39,17 +39,26 @@ orphan processes and gives a false sense of verification.
   real niri window and captures each with niri's per-window compositor
   screenshot (`niri msg action screenshot-window`), one process per story.
   PNGs land next to the story source file in a `<Title>/` subfolder
-  (e.g. `src/screens/Changes/Default.png` beside `src/screens/changes.tsx`).
+  (e.g. `src/screens/ChangesView/Default.png` beside
+  `src/screens/ChangesView.tsx`).
   `bun run storybook -- --only <filter>` renders a subset.
+- **Those screen PNGs are committed artifacts — never hand-edit or hand-take
+  screenshots.** `README.md` embeds them, so `.gitignore` keeps `*.png` ignored
+  but un-ignores `src/**/*.png`; refresh them with `bun run storybook` after any
+  UI change instead of adding new image assets.
 - **Stories live in `*.stories.tsx` next to the component/screen** they
-  show: `src/app.stories.tsx` (the `App` shell) and one per screen under
+  show: `src/App.stories.tsx` (the `App` shell) and one per screen under
   `src/screens/`. They use `defineMeta`/`defineStory` from `storybook` and
-  render the real screen components against the live jj repo (screens shell
-  out to `jj` in `findWorkspaceRoot()`), so shots show real data. Screens
-  that need a `changeId` (Evolog, Hunks) resolve the current `@` id at
-  module load. Set `parameters: { width, height, settleMs }` on the meta to
-  control window size and how long the renderer settles (async jj loads need
-  settle time).
+  render the real screen components. Screens are fed an **in-memory demo
+  repository** (`src/stories/demoData.ts` fixtures + `src/stories/demoJj.ts`, a
+  mock installed with `setJjMock()` from `src/repo.ts`, which intercepts `jj` /
+  `jj-hunk` before any process spawn), so shots are deterministic and show
+  realistic data — never build a scratch repo on disk for a screenshot. Each
+  story calls `installDemoData()` at module scope; the change-id-driven screens
+  (Evolog, Hunks) pass `demo.evologTarget` / `demo.hunkTarget`. Set
+  `parameters: { width, height, settleMs }` on the meta to control window size
+  and how long the renderer settles (async loads need settle time; the harness
+  waits wall-clock and then advances the renderer clock).
 - **`.storybook/main.tsx` holds the preview decorators** —
   the adwaita theme context (`AdwaitaContext` + the `nightsky` theme from
   `src/theme.ts`) and `ToastProvider`, matching the app's mount in

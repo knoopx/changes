@@ -29,37 +29,45 @@ Browse and manipulate a jj repository from a single window:
   applies. The filter set and the starting filter are user-configurable
   (see [Configuration](#configuration)).
 
-  ![Changes view — commit-graph gutter, file list, and native diff preview](assets/screenshot-changes.png)
-  *Changes view: commit-graph gutter + file list + table diff preview.*
+  ![Changes view — change list with commit-graph gutter, bookmark pills, file list, and a CSV table diff](src/screens/ChangesView/Default.png)
+  *Changes view: commit-graph gutter + bookmark pills + file list + word/cell-level table diff.*
 
 - **Bookmarks** — bookmark groups (local + remote references) with a file
   list and diff preview for each group's change; fetch, push, or forget
   bookmarks, and start a new change from a group.
 
-  ![Bookmarks view — bookmark groups, file list, and new-file diff](assets/screenshot-bookmarks.png)
-  *Bookmarks view: bookmark groups + file list + unified-diff preview.*
+  ![Bookmarks view — bookmark groups with remote references, file list, and a new-file diff](src/screens/BookmarksView/Default.png)
+  *Bookmarks view: local + remote bookmark groups + file list + unified-diff preview.*
 
 - **Op log** — the last 100 operations, each previewing the changes it
   introduced as a diff; restore to any operation, undo the latest one,
   or redo the last undone operation (Shift+U).
 
-  ![Op-log view — operation history with diff preview](assets/screenshot-oplog.png)
-  *Op-log view: operation history + diff of the operation's changes.*
+  ![Op-log view — operation history with the selected operation's diff](src/screens/OpLogView/Default.png)
+  *Op-log view: operation history + diff of the selected operation's changes.*
 
 - **Hunks** — a detail view of a file's hunks: select hunks, then split them
   into a new change or discard them (requires `jj-hunk`).
 
-  ![Hunks view — component library image diff](assets/screenshot-image-diff.png)
-  *Hunks view: image-file diff across a component-library change.*
+  ![Hunks view — hunk list with per-hunk preview](src/screens/HunksView/Default.png)
+  *Hunks view: hunk list (file, range, hunk id, type) + the selected hunk's preview.*
 
 - **Workspaces** — a browser for jj workspaces with per-workspace file list
   and diff; create a workspace, attach to its session, rebase + describe,
   open it in an editor or terminal, discard files, and delete it.
 
+  ![Workspaces view — workspace list and the selected workspace's diff](src/screens/WorkspacesView/Default.png)
+  *Workspaces view: workspace list + the selected workspace's combined diff.*
+
 Lists refresh automatically when the repository changes on disk, and
 transient results surface as toasts. The header bar carries the view
 switcher, the current branch label, and the working directory; the status bar
 shows the active view's key hints.
+
+Every screenshot above is a storybook capture committed next to its story
+(`src/screens/<View>/Default.png`) and rendered from an in-memory demo
+repository (`src/stories/`), so it is identical on every machine and never
+hand-maintained: `bun run storybook` regenerates all of them.
 
 ## Requirements
 

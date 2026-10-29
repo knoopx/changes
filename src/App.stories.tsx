@@ -1,5 +1,8 @@
 import { App } from "./App";
 import { defineMeta, defineStory } from "storybook";
+import { installDemoData } from "./stories/demoJj";
+
+installDemoData();
 
 const meta = defineMeta({
   title: "App",

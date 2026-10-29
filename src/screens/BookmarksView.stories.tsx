@@ -1,6 +1,9 @@
 import { BookmarksView } from "./BookmarksView";
 import type { View } from "../types";
 import { defineMeta, defineStory } from "storybook";
+import { installDemoData } from "../stories/demoJj";
+
+installDemoData();
 
 const noNavigate = (_view: View) => {};
 

@@ -51,10 +51,23 @@ export function findWorkspaceRoot(cwd?: string): string {
   }
 }
 
-interface CliResult {
+export interface CliResult {
   stdout: string;
   stderr: string;
   code: number;
+}
+
+
+export type ExternalMock = (
+  binary: string,
+  args: string[],
+  cwd?: string,
+) => CliResult | null;
+
+let externalMock: ExternalMock | null = null;
+
+export function setJjMock(mock: ExternalMock | null): void {
+  externalMock = mock;
 }
 
 async function runExternalBinary(
@@ -62,6 +75,10 @@ async function runExternalBinary(
   args: string[],
   cwd?: string,
 ): Promise<CliResult> {
+  if (externalMock) {
+    const mocked = externalMock(binary, args, cwd);
+    if (mocked) return mocked;
+  }
   const root = cwd ?? findWorkspaceRoot();
   try {
     const { stdout, stderr } = await pExecFile(binary, args, {
